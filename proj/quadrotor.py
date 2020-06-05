@@ -1,5 +1,6 @@
 import numpy as np
-# import scipy.integrate.odeint
+from scipy.integrate import solve_ivp
+from typing import Callable
 
 
 # constants
@@ -36,6 +37,9 @@ class Quadrotor:
         (phi, theta, psi): angular position in inertial frame (RPY respectively)
         (u, v, w): linear velocity in body frame
         (p, q, r): angular velocities in body frame
+    [5] Throughout the code, s is used to refer to the full state, i is used to
+        refer to control inputs, and d is used to refer to disturbances, where
+        the disturbances are specified as forces and torques in the body frame.
     """
 
     def __init__(
@@ -53,9 +57,9 @@ class Quadrotor:
         Parameters
         ----------
         m: float
-            Mass of the quadrotor
+            Mass of the quadrotor.
         I: np.ndarray, shape=(3,)
-            Principal moments of inertia
+            Principal moments of inertia.
         kf: float
             Thrust factor. Internal parameter for rotor speed to body force and
             moment conversion.
@@ -63,7 +67,7 @@ class Quadrotor:
             Drag factor. Internal parameter for rotor speed to body force and
             moment conversion.
         l: float
-            Distance from rotors to center of quadrotor
+            Distance from rotors to center of quadrotor.
         coord_sys: str
             Coordinate convention for the quadrotor. Default is NED.
         """
@@ -105,7 +109,7 @@ class Quadrotor:
     @property
     def _invU(self) -> np.ndarray:
         """
-        Matrix converting virtual forces/moments to squared rotor speeds
+        Matrix converting virtual forces/moments to squared rotor speeds.
 
         wsq = invU @ i
         """
@@ -124,7 +128,7 @@ class Quadrotor:
 
     @property
     def _A(self) -> np.ndarray:
-        """Linearized autonomous dynamics about hover"""
+        """Linearized autonomous dynamics about hover."""
 
         A = np.zeros((12, 12))
 
@@ -137,7 +141,7 @@ class Quadrotor:
 
     @property
     def _B(self) -> np.ndarray:
-        """Linearized control dynamics about hover"""
+        """Linearized control dynamics about hover."""
 
         m = self._m
         Ix, Iy, Iz = self._I
@@ -152,7 +156,7 @@ class Quadrotor:
 
     @property
     def _D(self) -> np.ndarray:
-        """Linearized disturbance dynamics about hover"""
+        """Linearized disturbance dynamics about hover."""
 
         m = self._m
         Ix, Iy, Iz = self._I
@@ -167,16 +171,16 @@ class Quadrotor:
 
     def _Rwb(self, phi: float, theta: float, psi: float) -> np.ndarray:
         """
-        Rotation matrix from BODY to WORLD frame
+        Rotation matrix from BODY to WORLD frame.
         
         Parameters
         ----------
         phi: float
-            Roll
+            Roll.
         theta: float
-            Pitch
+            Pitch.
         psi: float
-            Yaw
+            Yaw.
 
         Returns
         -------
@@ -204,19 +208,19 @@ class Quadrotor:
 
     def _Twb(self, phi: float, theta: float) -> np.ndarray:
         """
-        Angular velocity transformation matrix from BODY to WORLD frame
+        Angular velocity transformation matrix from BODY to WORLD frame.
 
         Parameters
         ----------
         phi: float
-            Roll
+            Roll.
         theta: float
-            Pitch
+            Pitch.
 
         Returns
         -------
         T: np.ndarray, shape=(3,3)
-            Angular velocity transformation matrix from BODY to WORLD frame
+            Angular velocity transformation matrix from BODY to WORLD frame.
         """
 
         cphi = np.cos(phi)
@@ -238,7 +242,7 @@ class Quadrotor:
         d: np.ndarray = np.zeros(6)
     ) -> np.ndarray:
         """
-        Quadrotor dynamics function
+        Quadrotor dynamics function.
 
         Parameters
         ----------
@@ -312,7 +316,8 @@ class Quadrotor:
     ) -> np.ndarray:
         """
         Linearized quadrotor dynamics function. See docstring for _dyn(...).
-        Specifically, we linearize about a hover with constant gravity.
+        Specifically, we linearize about a hover with constant gravity. This
+        function is NOT used for simulation, but for any linear controllers.
         """
 
         assert s.shape == (12,)
@@ -325,3 +330,47 @@ class Quadrotor:
 
         ds = A @ s + B @ i + D @ d
         return ds
+
+    def _simulate(
+        self,
+        s0: np.ndarray,
+        tsim: np.ndarray,
+        ifunc: Callable[[np.ndarray], np.ndarray],
+        dfunc: Callable[[float, np.ndarray], np.ndarray] = None
+    ) -> np.ndarray:
+        """
+        Simulator for the quadrotor.
+
+        Parameters
+        ----------
+        s0: np.ndarray, shape=(12,)
+            Initial state.
+        tsim: np.ndarray, shape=(T,)
+            Simulation query points.
+        ifunc: Callable[np.ndarray, np.ndarray]
+            Controller. Function that takes in the state and returns control.
+            We assume the controller to be time-invariant, but this could
+            easily be changed in the future.
+        dfunc: Callable[np.ndarray, np.ndarray]
+            Disturbance function. Takes in state and time and returns a
+            simulated disturbance.
+
+        Returns
+        -------
+        s_sol: np.ndarray, shape=(12, T)
+            Solution trajectories at the query times.
+        """
+
+        assert s0.shape == (12,)
+        assert tsim.ndim == 1
+
+        if dfunc is not None:
+            dyn = lambda t, s: self._dyn(s, ifunc(s), dfunc(t, s))
+        else:
+            dyn = lambda t, s: self._dyn(s, ifunc(s))
+
+        sol = solve_ivp(dyn, (tsim[0], tsim[-1]), s0, t_eval=tsim)
+        s_sol = sol.y
+
+        return s_sol
+
