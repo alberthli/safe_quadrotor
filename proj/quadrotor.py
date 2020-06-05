@@ -23,8 +23,8 @@ class Quadrotor:
 
                           2 ^ x
                             |
-                            |     y
-                     1 <----o----> 3
+                            |      y
+                     3 <----o----> 1
                             |
                             |
                             v 4
@@ -235,8 +235,7 @@ class Quadrotor:
         self,
         s: np.ndarray,
         i: np.ndarray,
-        fdb: np.ndarray = np.zeros(3),
-        taudb: np.ndarray  = np.zeros(3)
+        d: np.ndarray = np.zeros(6)
     ) -> np.ndarray:
         """
         Quadrotor dynamics function
@@ -252,10 +251,9 @@ class Quadrotor:
             Virtual input in order of (ft, taux, tauy, tauz), where ft is the
             total force and tauxyz are the angular torques. These are all
             with respect to the BODY frame.
-        fdb: np.ndarray, shape=(3,)
-            Body disturbance forces. Default none.
-        taudb: np.ndarray, shape=(3,)
-            Body disturbance torques. Default none.
+        d: np.ndarray, shape=(6,)
+            Disturbances in the BODY frame in order of (fdb, taudb), where fdb
+            are forces and taudb are torques. Ordered (x,y,z) each.
 
         Returns
         -------
@@ -265,8 +263,7 @@ class Quadrotor:
 
         assert s.shape == (12,)
         assert i.shape == (4,)
-        assert fdb.shape == (3,)
-        assert taudb.shape == (3,)
+        assert d.shape == (6,)
 
         # states
         o = s[0:3]         # x, y, z
@@ -276,8 +273,7 @@ class Quadrotor:
 
         # inputs and disturbances
         ft, taux, tauy, tauz = i
-        fdx, fdy, fdz = fdb
-        taudx, taudy, taudz = taudb
+        fdx, fdy, fdz, taudx, taudy, taudz = d
 
         # mass and inertias
         m = self._m
@@ -312,8 +308,7 @@ class Quadrotor:
         self,
         s: np.ndarray,
         i: np.ndarray,
-        fdb: np.ndarray = np.zeros(3),
-        taudb: np.ndarray  = np.zeros(3)
+        d: np.ndarray = np.zeros(6)
     ) -> np.ndarray:
         """
         Linearized quadrotor dynamics function. See docstring for _dyn(...).
@@ -322,10 +317,7 @@ class Quadrotor:
 
         assert s.shape == (12,)
         assert i.shape == (4,)
-        assert fdb.shape == (3,)
-        assert taudb.shape == (3,)
-
-        d = np.hstack((fdb, taudb)) # disturbance vector
+        assert d.shape == (6,)
 
         A = self._A
         B = self._B
