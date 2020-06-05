@@ -157,7 +157,7 @@ class SimulationEnvironment:
         ifunc: Callable[[float, np.ndarray], np.ndarray],
         dfunc: Callable[[float, np.ndarray], np.ndarray] = None,
         animate: bool = False,
-        animation_name: str = None
+        anim_name: str = None
     ) -> np.ndarray:
         """
         Simulates a quadrotor run.
@@ -210,6 +210,6 @@ class SimulationEnvironment:
             if animation_name is not None:
                 Writer = animation.writers['ffmpeg']
                 writer = Writer(fps=60, bitrate=1800)
-                anim.save('sims/{}.mp4'.format(animation_name), writer=writer)
+                anim.save('sims/{}.mp4'.format(anim_name), writer=writer)
 
         return s_sol

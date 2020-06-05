@@ -9,6 +9,8 @@ TODO
 [1] Define an obstacle class, add attribute to simulator to store a list of
     obstacles and draw them.
 [2] Define controller interface so controller design can begin.
+[3] Set up a way to do multi-rate stuff. Add events for fast and slow control
+    updates. This will probably be non-trivial.
 """
 
 if __name__ == "__main__":
@@ -23,4 +25,4 @@ if __name__ == "__main__":
         [quad._m * 9.81 + 0.1 * np.sin(t), 0, 0, 0.1 * np.sin(t)])
 	s0 = np.zeros(12)
 	tsim = np.linspace(0, 10, 101)
-	simulator.simulate(s0, tsim, ctrl, animate=True, animation_name='test')
+	simulator.simulate(s0, tsim, ctrl, animate=True, anim_name='test')
