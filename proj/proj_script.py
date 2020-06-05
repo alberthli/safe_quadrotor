@@ -23,4 +23,4 @@ if __name__ == "__main__":
         [quad._m * 9.81 + 0.1 * np.sin(t), 0, 0, 0.1 * np.sin(t)])
 	s0 = np.zeros(12)
 	tsim = np.linspace(0, 10, 101)
-	simulator.simulate(s0, tsim, ctrl, animate=True)
+	simulator.simulate(s0, tsim, ctrl, animate=True, animation_name='test')

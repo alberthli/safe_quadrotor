@@ -207,4 +207,9 @@ class SimulationEnvironment:
                 self._fig, _anim_quad, interval=(50 / 3.), frames=len(tsim))
             plt.show()
 
+            if animation_name is not None:
+                Writer = animation.writers['ffmpeg']
+                writer = Writer(fps=60, bitrate=1800)
+                anim.save('sims/{}.mp4'.format(animation_name), writer=writer)
+
         return s_sol
