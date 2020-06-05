@@ -126,47 +126,47 @@ class Quadrotor:
         return _invU
 
     @property
-    def A(self) -> np.ndarray:
+    def _A(self) -> np.ndarray:
         """Linearized autonomous dynamics about hover."""
 
-        _A = np.zeros((12, 12))
+        A = np.zeros((12, 12))
 
-        _A[0:3, 6:9] = np.eye(3)
-        _A[3:6, 9:12] = np.eye(3)
-        _A[6, 4] = -g
-        _A[7, 3] = g
+        A[0:3, 6:9] = np.eye(3)
+        A[3:6, 9:12] = np.eye(3)
+        A[6, 4] = -g
+        A[7, 3] = g
 
-        return _A
+        return A
 
     @property
-    def B(self) -> np.ndarray:
+    def _B(self) -> np.ndarray:
         """Linearized control dynamics about hover."""
 
         m = self._m
         Ix, Iy, Iz = self._I
-        _B = np.zeros((12, 4))
+        B = np.zeros((12, 4))
 
-        _B[8, 0] = 1. / m
-        _B[9, 1] = 1. / Ix
-        _B[10, 2] = 1. / Iy
-        _B[11, 3] = 1. / Iz
+        B[8, 0] = 1. / m
+        B[9, 1] = 1. / Ix
+        B[10, 2] = 1. / Iy
+        B[11, 3] = 1. / Iz
 
-        return _B
+        return B
 
     @property
-    def D(self) -> np.ndarray:
+    def _D(self) -> np.ndarray:
         """Linearized disturbance dynamics about hover."""
 
         m = self._m
         Ix, Iy, Iz = self._I
-        _D = np.zeros((12, 6))
+        D = np.zeros((12, 6))
 
-        _D[6:9, 0:3] = np.eye(3) / m
-        _D[9, 3] = 1. / Ix
-        _D[10, 4] = 1. / Iy
-        _D[11, 5] = 1. / Iz
+        D[6:9, 0:3] = np.eye(3) / m
+        D[9, 3] = 1. / Ix
+        D[10, 4] = 1. / Iy
+        D[11, 5] = 1. / Iz
 
-        return _D
+        return D
 
     def _Rwb(self, alpha: np.ndarray) -> np.ndarray:
         """

@@ -63,7 +63,7 @@ class MultirateQuadController(Controller):
         assert slow_rate > 0.
         assert fast_rate > 0.
 
-        super(MultirateController, self).__init__(12, 4)
+        super(MultirateQuadController, self).__init__(12, 4)
 
         self._slow_dt = 1. / slow_rate
         self._fast_dt = 1. / fast_rate
@@ -73,11 +73,17 @@ class MultirateQuadController(Controller):
         self._fast_T_mem = None
         self._iv = None     # ZOH slow control
         self._iu = None     # ZOH fast control
-        self._s_bar = None      # planned state
+        self._s_bar = None  # planned state
+
+        # control design variables
+        self._A = quad.A
+        self._B = quad.B
+        self._fdyn = lambda s: quad._fdyn(s)
+        self._gdyn = lambda s: quad._gdyn(s)
 
     def _slow_ctrl(self, t: float, s: np.ndarray) -> np.ndarray:
         """
-        Slow control law. Updates _s_bar internally.
+        Slow control law. Updates _s_bar internally using MPC.
 
         Parameters
         ----------
@@ -91,11 +97,14 @@ class MultirateQuadController(Controller):
         i: np.ndarray, shape=(m,)
             Control input.
         """
-        raise NotImplementedError
+        
+        # TODO: replace this with actual code
+        print("slow: {}".format(t))
+        return np.zeros(self._m)
 
     def _fast_ctrl(self, t: float, s: np.ndarray) -> np.ndarray:
         """
-        Fast control law. Outputs deviation from _iv.
+        Fast control law. Outputs deviation from _iv using CBFs.
 
         Parameters
         ----------
@@ -109,7 +118,10 @@ class MultirateQuadController(Controller):
         i: np.ndarray, shape=(m,)
             Control input.
         """
-        raise NotImplementedError
+
+        # TODO: replace this with actual code
+        print("fast: {}".format(t))
+        return np.zeros(self._m)
 
     def reset(self) -> None:
         """
@@ -162,4 +174,3 @@ class MultirateQuadController(Controller):
             self._iu = self._fast_ctrl(t, s)
 
         return self._iv + self._iu
-        

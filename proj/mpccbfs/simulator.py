@@ -7,6 +7,7 @@ import mpl_toolkits.mplot3d.axes3d as p3
 import matplotlib.animation as animation
 
 from mpccbfs.quadrotor import Quadrotor
+from mpccbfs.controllers import Controller
 
 
 class SimulationEnvironment:
@@ -21,6 +22,7 @@ class SimulationEnvironment:
     def __init__(
         self,
         quad: Quadrotor,
+        ctrler: Controller,
         xlim: Tuple[float, float],
         ylim: Tuple[float, float],
         zlim: Tuple[float, float]
@@ -37,6 +39,7 @@ class SimulationEnvironment:
         """
 
         self._quad = quad
+        self._ctrler = ctrler
 
         self._fig = plt.figure()
         self._ax = p3.Axes3D(self._fig)
@@ -79,18 +82,14 @@ class SimulationEnvironment:
             [0., -1., 0.],
             [0., 0., -1.]]) # rotates 180 degrees about north (x)
 
-        # rotor locations (NED -> NWU)
-        r1 = o + Rwb @ np.array([0., l, 0.])
-        r2 = o + Rwb @ np.array([l, 0., 0.])
-        r3 = o + Rwb @ np.array([0., -l, 0.])
-        r4 = o + Rwb @ np.array([-l, 0., 0.])
+        # rotor base locations on frame in NWU frame
+        r1 = Rnwu @ (o + Rwb @ np.array([0., l, 0.]))
+        r2 = Rnwu @ (o + Rwb @ np.array([l, 0., 0.]))
+        r3 = Rnwu @ (o + Rwb @ np.array([0., -l, 0.]))
+        r4 = Rnwu @ (o + Rwb @ np.array([-l, 0., 0.]))
 
-        r1 = Rnwu @ r1
-        r2 = Rnwu @ r2
-        r3 = Rnwu @ r3
-        r4 = Rnwu @ r4
-
-        ro = Rnwu @ Rwb @ np.array([0., 0., -l / 10.]) # rotor offset
+        # rotor vertical offsets
+        ro = Rnwu @ Rwb @ np.array([0., 0., -l / 10.])
         r1o = r1 + ro
         r2o = r2 + ro
         r3o = r3 + ro
@@ -154,7 +153,6 @@ class SimulationEnvironment:
         self,
         s0: np.ndarray,
         tsim: np.ndarray,
-        ifunc: Callable[[float, np.ndarray], np.ndarray],
         dfunc: Callable[[float, np.ndarray], np.ndarray] = None,
         animate: bool = False,
         anim_name: str = None
@@ -168,9 +166,6 @@ class SimulationEnvironment:
             Initial state.
         tsim: np.ndarray, shape=(T,)
             Simulation query points.
-        ifunc: Callable[np.ndarray, np.ndarray]
-            Controller. Function that takes in the time and state and returns
-            control input.
         dfunc: Callable[np.ndarray, np.ndarray]
             Disturbance function. Takes in state and time and returns a
             simulated disturbance.
@@ -188,14 +183,21 @@ class SimulationEnvironment:
 
         # simulating dynamics
         quad = self._quad
+        ctrl = lambda t, s: self._ctrler.ctrl(t, s)
 
         if dfunc is not None:
-            dyn = lambda t, s: quad._dyn(s, ifunc(t, s), dfunc(t, s))
+            dyn = lambda t, s: quad._dyn(s, ctrl(t, s), dfunc(t, s))
         else:
-            dyn = lambda t, s: quad._dyn(s, ifunc(t, s))
+            dyn = lambda t, s: quad._dyn(s, ctrl(t, s))
 
-        sol = solve_ivp(dyn, (tsim[0], tsim[-1]), s0, t_eval=tsim)
+        sol = solve_ivp(
+            dyn,
+            (tsim[0], tsim[-1]),
+            s0,
+            t_eval=tsim,
+            max_step=(self._ctrler._fast_dt / 10.)) # cap framerate of reality
         s_sol = sol.y
+        self._ctrler.reset()
 
         # animation
         if animate:
