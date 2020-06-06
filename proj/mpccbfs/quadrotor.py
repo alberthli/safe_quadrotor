@@ -12,11 +12,11 @@ class Quadrotor:
 
     Conventions:
     [1] The default inertial frame is fixed and NWU (north, west, up).
-    [2] Forward direction is x, left is y
+    [2] Forward direction is x, left is y in body frame.
     [3] Forward and rear rotors are numbered 1 and 3 respectively. Left and
         right rotors are numbered 4 and 2 respectively. The even rotors
         rotate CCW and the odd rotors rotate CW. When aligned with the inertial
-        frame, this means x is aligned with N, y is aligned with E, and
+        frame, this means x is aligned with N, y is aligned with W, and
         z is aligned with U.
 
                           1 ^ x

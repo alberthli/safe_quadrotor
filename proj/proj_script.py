@@ -12,7 +12,15 @@ TODO
 """
 
 if __name__ == "__main__":
-    quad = Quadrotor(1, np.array([1., 1., 1.]), 1., 1., 0.1, 0.05, 0.025)
+    quad = Quadrotor(
+        1,                      # mass
+        np.array([1., 1., 1.]), # principal moments of inertia
+        1.,                     # thrust factor
+        1.,                     # drag factor
+        0.1,                    # rotor arm length
+        0.05,                   # safe distance from obstacles
+        0.025                   # safe rotation angle (rad)
+    )
     # mrc = MultirateQuadController(quad, 10, 100) # INCOMPLETE: multi-rate ctrl
     pdc = PDQuadController(
         quad,
@@ -32,6 +40,5 @@ if __name__ == "__main__":
         (-1, 1),
         (-1, 1))
     s0 = np.zeros(12) # initial state
-    s0[5] = 0.5
     tsim = np.linspace(0, 30, 301) # query times
     _ = simulator.simulate(s0, tsim, animate=True)
