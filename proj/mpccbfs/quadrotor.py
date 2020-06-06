@@ -8,28 +8,28 @@ class Quadrotor:
     """
     Quadrotor object. Conventions are from:
 
-    'Quadrotor control: modeling, nonlinear control design, and simulation'
+    'Modelling, Identification and Control of a Quadrotor Helicopter'
 
     Conventions:
-    [1] The default inertial frame is fixed and NED (north, east, down).
+    [1] The default inertial frame is fixed and NWU (north, west, up).
     [2] Forward direction is x, left is y
-    [3] Forward and rear rotors are numbered 2 and 4 respectively. Left and
-        right rotors are numbered 3 and 1 respectively. The even rotors
+    [3] Forward and rear rotors are numbered 1 and 3 respectively. Left and
+        right rotors are numbered 4 and 2 respectively. The even rotors
         rotate CCW and the odd rotors rotate CW. When aligned with the inertial
         frame, this means x is aligned with N, y is aligned with E, and
-        z is aligned with D.
+        z is aligned with U.
 
-                          2 ^ x
+                          1 ^ x
                             |
-                            |      y
-                     3 <----o----> 1
+                     y      |      
+                     4 <----o----> 2
                             |
                             |
-                            v 4
+                            v 3
 
     [4] Let the quadrotor state be in R^12. The origin and axes of the body
         frame should coincide with the barycenter of the quadrotor and the
-        principal axes.
+        principal axes. Angle states follow ZYX Euler angle conventions.
         (x, y, z): Cartesian position in inertial frame
         (phi, theta, psi): angular position in inertial frame (RPY respectively)
         (u, v, w): linear velocity in body frame
@@ -52,7 +52,9 @@ class Quadrotor:
         I: np.ndarray,
         kf: float,
         km: float,
-        l: float
+        l: float,
+        safe_dist: float,
+        safe_rot: float
     ) -> None:
         """
         Quadrotor initialization
@@ -71,22 +73,24 @@ class Quadrotor:
             moment conversion.
         l: float
             Distance from rotors to center of quadrotor.
-        coord_sys: str
-            Coordinate convention for the quadrotor. Default is NED.
+        safe_dist: float
+            Safe distance kept from obstacles.
+        safe_rot: float
+            Safe amount of rotation in radians.
         """
-
-        self._m = m
 
         assert I.shape == (3,)
         assert np.all(I > 0.)
-        self._I = I
 
+        self._m = m
+        self._I = I
         self._kf = kf
         self._km = km
         self._l = l
+        self._safe_dist = self._l + safe_dist
 
     @property
-    def U(self) -> np.ndarray:
+    def _U(self) -> np.ndarray:
         """
         Matrix converting squared rotor speeds to virtual forces/moments.
 
@@ -97,16 +101,16 @@ class Quadrotor:
         km = self._km
         l = self._l
 
-        _U = np.array([
+        U = np.array([
             [kf, kf, kf, kf],
-            [kf * l, 0. -kf * l, 0.],
             [0., -kf * l, 0., kf * l],
+            [-kf * l, 0., kf * l, 0.],
             [-km, km, -km, km]])
 
-        return _U
+        return U
 
     @property
-    def invU(self) -> np.ndarray:
+    def _invU(self) -> np.ndarray:
         """
         Matrix converting virtual forces/moments to squared rotor speeds.
 
@@ -117,13 +121,13 @@ class Quadrotor:
         km = self._km
         l = self._l
 
-        _invU = np.array([
-            [1. / kf, -2. / (kf * l), 0., -1. / km],
-            [1. / kf, 0., -2. / (kf * l), -1 / km],
-            [1. / kf, 2. / (kf * l), 0., -1. / km],
-            [1. / kf, 0., 2. / (kf * l), 0., 1. / km]]) / 4.
+        invU = np.array([
+            [1. / kf, 0., -2. / (kf * l), -1. / km],
+            [1. / kf, -2. / (kf * l), 0., 1 / km],
+            [1. / kf, 0., 2. / (kf * l), -1. / km],
+            [1. / kf, 2. / (kf * l), 0., 1. / km]]) / 4.
 
-        return _invU
+        return invU
 
     @property
     def _A(self) -> np.ndarray:
@@ -236,7 +240,9 @@ class Quadrotor:
 
     def _fdyn(self, s: np.ndarray) -> np.ndarray:
         """
-        Quadrotor autonomous dynamics.
+        Quadrotor autonomous dynamics WITHOUT gyroscopic effects for 
+        simplicity. They are included in the source. If gyroscopic effects are
+        present, the system is no longer control affine.
 
         Parameters
         ----------
@@ -273,9 +279,9 @@ class Quadrotor:
         phi, th, _ = alpha
 
         ddo_b = np.array([
-            r * v - q * w - g * np.sin(th),
-            p * w - r * u + g * np.sin(phi) * np.cos(th),
-            q * u - p * v + g * np.cos(th) * np.cos(phi)])
+            r * v - q * w + g * np.sin(th),
+            p * w - r * u - g * np.sin(phi) * np.cos(th),
+            q * u - p * v - g * np.cos(th) * np.cos(phi)])
         ddalpha_b = np.array([
             ((Iy - Iz) * q * r) / Ix,
             ((Iz - Ix) * p * r) / Iy,
@@ -307,7 +313,7 @@ class Quadrotor:
 
         # accelerations
         ddo_b = np.zeros((3, 4))
-        ddo_b[2, 0] = -1. / m
+        ddo_b[2, 0] = 1. / m
 
         ddalpha_b = np.zeros((3, 4))
         ddalpha_b[0, 1] = 1. / Ix
@@ -381,27 +387,4 @@ class Quadrotor:
         wdyn = self._wdyn(d)
 
         ds = fdyn + gdyn @ i + wdyn
-        return ds
-
-    def _dyn_linear_hover(
-        self,
-        s: np.ndarray,
-        i: np.ndarray,
-        d: np.ndarray = np.zeros(6)
-    ) -> np.ndarray:
-        """
-        Linearized quadrotor dynamics function. See docstring for _dyn(...).
-        Specifically, we linearize about a hover with constant gravity. This
-        function is NOT used for simulation, but for any linear controllers.
-        """
-
-        assert s.shape == (12,)
-        assert i.shape == (4,)
-        assert d.shape == (6,)
-
-        A = self.A
-        B = self.B
-        D = self.D
-
-        ds = A @ s + B @ i + D @ d
         return ds

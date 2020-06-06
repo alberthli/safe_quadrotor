@@ -2,29 +2,36 @@ import numpy as np
 
 from mpccbfs.quadrotor import Quadrotor
 from mpccbfs.simulator import SimulationEnvironment
-from mpccbfs.controllers import MultirateQuadController
+from mpccbfs.controllers import MultirateQuadController, PDQuadController
+from mpccbfs.obstacles import Obstacle, SphereObstacle
 
 """
 TODO
 ----
 [1] Design the MPC/CBF controllers
-[2] Write obstacle interface for simulator. maybe use some sort of set-based
-    math? not sure what the best way is to do this, especially for something
-    like collision detection.
 """
 
 if __name__ == "__main__":
-    # simple example of simulator usage. the current controller is NOT complete.
-    # it simply outputs the time the controllers update internally to prove
-    # that we can do multirate control.
-    quad = Quadrotor(1, np.array([1., 1., 1.]), 1., 1., 0.1)
-    mrc = MultirateQuadController(quad, 10, 100)
-    simulator = SimulationEnvironment(
+    quad = Quadrotor(1, np.array([1., 1., 1.]), 1., 1., 0.1, 0.05, 0.025)
+    # mrc = MultirateQuadController(quad, 10, 100) # INCOMPLETE: multi-rate ctrl
+    pdc = PDQuadController(
         quad,
-        mrc,
-        (-1, 1),
+        0.01, # dt for simulation
+        0.01, # kp_xyz, position
+        0.04, # kd_xyz
+        10,   # kp_a, attitude
+        5,    # kd_a
+        lambda t: np.array([0.3 * np.cos(t), 0.3 * np.sin(t), 0, 0]) # ref
+    ) # PD Controller
+    obs1 = SphereObstacle(np.array([0.2,0,0]), 0.15)
+    simulator = SimulationEnvironment(
+        quad,    # quadcopter
+        pdc,     # controller
+        None,    # obstacle list
+        (-1, 1), # xyz limits
         (-1, 1),
         (-1, 1))
-    s0 = np.zeros(12)
-    tsim = np.linspace(0, 10, 101)
-    simulator.simulate(s0, tsim, animate=True, anim_name='test')
+    s0 = np.zeros(12) # initial state
+    s0[5] = 0.5
+    tsim = np.linspace(0, 30, 301) # query times
+    _ = simulator.simulate(s0, tsim, animate=True)
