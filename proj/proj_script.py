@@ -31,8 +31,9 @@ I = np.array([1., 1., 1.]) # principal moments of inertia
 kf = 1.                    # thrust factor
 km = 1.                    # drag factor
 l = 0.1                    # rotor arm length
+Jtp = 0.1                  # Optional: total rot moment about prop axes (gyro)
 
-quad = Quadrotor(m, I, kf, km, l)
+quad = Quadrotor(m, I, kf, km, l, Jtp)
 
 
 # CONTROLLERS #
@@ -99,6 +100,7 @@ simulator = SimulationEnvironment(
 
 if __name__ == "__main__":
     s0 = np.zeros(12) # initial state
+    s0[5] = 1 # initial yaw
     tsim = np.linspace(0, 10, 101) # query times
     sim_data = simulator.simulate(
         s0,

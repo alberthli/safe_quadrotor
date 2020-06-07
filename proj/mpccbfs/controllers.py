@@ -97,6 +97,60 @@ class PDQuadController(Controller):
         self._kd_a = kd_a
         self._ref = ref
 
+    def _rebalance(self, wsq_cand: np.ndarray) -> np.ndarray:
+        """
+        Rebalances a vector of candidate squared rotor speeds to ensure that
+        they remain non-negative.
+
+        Parameters
+        ----------
+        wsq_cand: np.ndarray, shape=(4,)
+            Candidate squared rotor speeds.
+
+        Returns
+        -------
+        wsq: np.ndarray, shape=(4,)
+            Rebalanced squared rotor speeds.
+        """
+
+        assert wsq_cand.shape == (4,)
+
+        if not any(wsq_cand < 0.):
+            return wsq_cand
+
+        else:
+            # recovering commanded correction values
+            D = np.array([         # cors -> wsq
+                [0., -1., -1, 1.],
+                [-1., 0., 1., 1.],
+                [0., 1., -1., 1.],
+                [1., 0., 1., 1.]])
+            invD = np.array([      # wsq -> cors
+                [0., -2., 0., 2.],
+                [-2., 0., 2., 0.],
+                [-1., 1., -1., 1],
+                [1., 1., 1., 1.]]) / 4.
+            cors = invD @ wsq_cand # (phi, theta, psi, z)
+
+            z_off = ( # gravity offset
+                (self._quad._invU @
+                    np.array([self._quad._m * g, 0., 0., 0.]))[0]
+            )
+            z_cor = cors[0] # z correction
+            max_vio = np.max( # maximum non-negative violation occurs from here
+                (np.abs(cors[0]) + np.abs(cors[1])),
+                (np.abs(cors[0]) + np.abs(cors[2])),
+                (np.abs(cors[1]) + np.abs(cors[2]))
+            )
+
+            vio_ratio = max_vio / z_cor
+            cors /= vio_ratio
+            cors[0] = z_cor
+            wsq = D @ cors
+
+            assert all(wsq >= 0.)
+            return wsq
+
     def ctrl(self, t: float, s: np.ndarray) -> np.ndarray:
         """
         PD control law. This is an inner-outer loop controller, where the inner
@@ -154,10 +208,15 @@ class PDQuadController(Controller):
         e_psi = psi - psi_d
         e_z = z - z_d
 
+        z_off = ( # gravity offset
+            (self._quad._invU @ np.array([self._quad._m * g, 0., 0., 0.]))[0]
+        )
+
         phi_cor = -kp_a * e_phi - kd_a * p
         theta_cor = -kp_a * e_theta - kd_a * q
-        psi_cor = -kp_a * e_psi - kd_a * r
-        z_cor = -kp_xyz * e_z - kd_xyz * w
+        psi_cor = -kp_xyz * e_psi - kd_xyz * r # not too aggressive
+        z_cor = -kp_xyz * e_z - kd_xyz * w + z_off # gravity offset
+        z_cor = np.maximum(z_cor, 0.1) # minimum correction to avoid freefall
 
         # rotor speed mixing law -> real inputs
         wsq = np.zeros(4)
@@ -165,11 +224,11 @@ class PDQuadController(Controller):
         wsq[1] = z_cor - phi_cor + psi_cor
         wsq[2] = z_cor + theta_cor - psi_cor
         wsq[3] = z_cor + phi_cor + psi_cor
+        wsq = self._rebalance(wsq)
 
         # conversion to virtual inputs for simulation
         U = self._quad._U
         i = U @ wsq
-        i[0] += self._quad._m * g
 
         return i
 
@@ -341,7 +400,8 @@ class MultirateQuadController(Controller):
         Computes the safety constraints for a quadrotor input in the current
         state. Lie derivatives computed using the symbolic helper function. For
         obstacles, we assume the system can omnisciently observe on the
-        obstacle parameters. This simplifies the ECBF computations greatly.
+        obstacle parameters. This simplifies the ECBF computations greatly. Also
+        has a non-negativity constraints on the rotor speeds.
 
         Parameters
         ----------
@@ -362,9 +422,9 @@ class MultirateQuadController(Controller):
 
         # initializing constraint matrices
         if obs_list is not None:
-            num_constr = 3 + len(obs_list)
+            num_constr = 7 + len(obs_list)
         else:
-            num_constr = 3
+            num_constr = 7
 
         A = np.zeros((num_constr, 4))
         lb = -np.inf * np.ones(num_constr)
@@ -521,6 +581,10 @@ class MultirateQuadController(Controller):
 
             else:
                 raise NotImplementedError
+
+        # non-negative rotor speed constraints
+        A[-4:, :] = -self._quad._invU
+        ub[-4:] = 0.
 
         # constraint object
         safety_cons = LinearConstraint(A, lb, ub)

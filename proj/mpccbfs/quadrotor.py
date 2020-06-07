@@ -53,7 +53,8 @@ class Quadrotor:
         I: np.ndarray,
         kf: float,
         km: float,
-        l: float
+        l: float,
+        Jtp: float = None
     ) -> None:
         """
         Quadrotor initialization
@@ -72,16 +73,22 @@ class Quadrotor:
             moment conversion.
         l: float
             Distance from rotors to center of quadrotor.
+        Jtp: float
+            Total rotational moment of inertia about the propellor axes. Used
+            for computing the gyroscopic effect.
         """
 
         assert I.shape == (3,)
         assert np.all(I > 0.)
+        if Jtp is not None:
+            assert Jtp > 0.
 
         self._m = m
         self._I = I
         self._kf = kf
         self._km = km
         self._l = l
+        self._Jtp = Jtp
 
     @property
     def _U(self) -> np.ndarray:
@@ -234,9 +241,7 @@ class Quadrotor:
 
     def _fdyn(self, s: np.ndarray) -> np.ndarray:
         """
-        Quadrotor autonomous dynamics WITHOUT gyroscopic effects for 
-        simplicity. They are included in the source. If gyroscopic effects are
-        present, the system is no longer control affine.
+        Quadrotor autonomous dynamics.
 
         Parameters
         ----------
@@ -379,6 +384,26 @@ class Quadrotor:
         fdyn = self._fdyn(s)
         gdyn = self._gdyn(s)
         wdyn = self._wdyn(d)
+        ds_gyro = np.zeros(12)
 
-        ds = fdyn + gdyn @ i + wdyn
+        # check whether gyroscopic effects are modeled. Note: this is
+        # functionally treated as a disturbance, since if it is directly
+        # modeled for control, the system is no longer control affine. However,
+        # including this in simulations can help test for robustness.
+        if self._Jtp is not None:
+            Jtp = self._Jtp
+            Ix, Iy, _ = self._I
+            p = s[9]
+            q = s[10]
+
+            wsq = self._invU @ i
+            w = np.sqrt(wsq)
+            w[0] *= -1
+            w[2] *= -1
+            Omega = np.sum(w) # net prop speeds
+
+            ds_gyro[9] = -Jtp * q * Omega / Ix
+            ds_gyro[10] = Jtp * p * Omega / Iy
+
+        ds = fdyn + gdyn @ i + wdyn + ds_gyro
         return ds
