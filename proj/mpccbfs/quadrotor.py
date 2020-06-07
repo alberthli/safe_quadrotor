@@ -41,7 +41,7 @@ class Quadrotor:
            the INERTIAL frame. dob and dalphab are the linear and angular
            velocities in the BODY frame.
         i: Virtual input in order of (ft, taux, tauy, tauz), where ft is the
-           total thrust in the -z direction and tauxyz are the angular torques.
+           total thrust in the +z direction and tauxyz are the angular torques.
            These are all with respect to the BODY frame.
         d: Disturbances in the BODY frame in order of (fdb, taudb), where fdb
            are forces and taudb are torques. Ordered (x,y,z) each.
@@ -131,8 +131,8 @@ class Quadrotor:
 
         A[0:3, 6:9] = np.eye(3)
         A[3:6, 9:12] = np.eye(3)
-        A[6, 4] = -g
-        A[7, 3] = g
+        A[6, 4] = g
+        A[7, 3] = -g
 
         return A
 
