@@ -8,7 +8,7 @@ import mpl_toolkits.mplot3d.axes3d as p3
 import matplotlib.animation as animation
 
 from mpccbfs.quadrotor import Quadrotor
-from mpccbfs.controllers import Controller
+from mpccbfs.controllers import Controller, MultirateQuadController
 from mpccbfs.obstacles import Obstacle, SphereObstacle
 
 
@@ -16,7 +16,7 @@ class SimulationEnvironment:
     """
     Simulation environment for the quadrotor. Note: for some reason matplotlib
     has not implemented equal aspect ratios for 3d plots for almost a decade.
-    This means spheres will not show up as spheres. Ridiculous...
+    This means spheres will be ellipsoids. Ridiculous...
 
     The green rotor denotes the front of the quadrotor.
     """
@@ -135,7 +135,6 @@ class SimulationEnvironment:
 
         for obs in self._obs_list:
             if obs._otype == 'sphere':
-                # u, v = np.mgrid[0:2*np.pi:181j, 0:np.pi:91j]
                 u = np.linspace(0, 2 * np.pi, 181)
                 v = np.linspace(0, np.pi, 91)
                 x = obs._r * np.outer(np.cos(u), np.sin(v)) + obs._c[0]
@@ -219,15 +218,21 @@ class SimulationEnvironment:
         assert s0.shape == (12,)
         assert tsim.ndim == 1
 
-        # simulating dynamics
         quad = self._quad
-        ctrl = lambda t, s: self._ctrler.ctrl(t, s)
 
+        # controller
+        if type(self._ctrler) == MultirateQuadController:
+            ctrl = lambda t, s: self._ctrler.ctrl(t, s, self._obs_list)
+        else:
+            ctrl = lambda t, s: self._ctrler.ctrl(t, s)
+
+        # disturbance function
         if dfunc is not None:
             dyn = lambda t, s: quad._dyn(s, ctrl(t, s), dfunc(t, s))
         else:
             dyn = lambda t, s: quad._dyn(s, ctrl(t, s))
 
+        # simulating dynamics
         sol = solve_ivp(
             dyn,
             (tsim[0], tsim[-1]),
@@ -247,7 +252,6 @@ class SimulationEnvironment:
 
             anim = animation.FuncAnimation(
                 self._fig, _anim_quad, interval=(50 / 3.), frames=len(tsim))
-
             plt.show()
 
             if anim_name is not None:

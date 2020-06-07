@@ -1,4 +1,5 @@
 import numpy as np
+from typing import List, Callable
 
 
 # constants
@@ -52,9 +53,7 @@ class Quadrotor:
         I: np.ndarray,
         kf: float,
         km: float,
-        l: float,
-        safe_dist: float,
-        safe_rot: float
+        l: float
     ) -> None:
         """
         Quadrotor initialization
@@ -73,10 +72,6 @@ class Quadrotor:
             moment conversion.
         l: float
             Distance from rotors to center of quadrotor.
-        safe_dist: float
-            Safe distance kept from obstacles.
-        safe_rot: float
-            Safe amount of rotation in radians.
         """
 
         assert I.shape == (3,)
@@ -87,7 +82,6 @@ class Quadrotor:
         self._kf = kf
         self._km = km
         self._l = l
-        self._safe_dist = self._l + safe_dist
 
     @property
     def _U(self) -> np.ndarray:
