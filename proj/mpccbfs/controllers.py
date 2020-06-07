@@ -536,6 +536,7 @@ class MultirateQuadController(Controller):
         self._iv = None
         self._iu = None
         self._s_bar = None
+        self._K_vals = None
 
     def ctrl(
         self,
