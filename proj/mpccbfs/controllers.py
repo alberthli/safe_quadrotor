@@ -20,7 +20,7 @@ class Controller(ABC):
         super(Controller, self).__init__()
 
         self._n = n
-        self._m = m
+        self._control_dim = m
         self._sim_dt = None
 
     @abstractmethod
@@ -346,14 +346,14 @@ class MultirateQuadController(Controller):
         i: np.ndarray, shape=(m,)
             Control input.
         """
-        
+
         assert s.shape == (self._n,)
 
         # TODO: replace this with actual code. strategy: use linear hover
         # dynamics to plan stuff on a high level.
         # print("slow: {}".format(t))
-        iv = np.zeros(self._m)
-        iv[0] = self._quad._m * g + 1
+        iv = np.zeros(self._control_dim)
+        iv[0] = self._quad._m * g# + 1
         return iv
 
     def _fast_ctrl(
@@ -625,7 +625,7 @@ class MultirateQuadController(Controller):
         i: np.ndarray, shape=(m,)
             Control input.
         """
-        
+
         assert s.shape == (self._n,)
 
         # initializing memory
@@ -636,8 +636,8 @@ class MultirateQuadController(Controller):
             self._iv = self._slow_ctrl(t, s)
             self._iu = self._fast_ctrl(t, s, obs_list)
 
-            assert self._iv.shape == (self._m,)
-            assert self._iu.shape == (self._m,)
+            assert self._iv.shape == (self._control_dim,)
+            assert self._iu.shape == (self._control_dim,)
 
             return self._iv + self._iu
 
@@ -645,12 +645,12 @@ class MultirateQuadController(Controller):
         if (t - self._slow_T_mem) > self._slow_dt:
             self._slow_T_mem = self._slow_T_mem + self._slow_dt
             self._iv = self._slow_ctrl(t, s)
-            assert self._iv.shape == (self._m,)
+            assert self._iv.shape == (self._control_dim,)
 
         # fast control update
         if (t - self._fast_T_mem) > self._fast_dt:
             self._fast_T_mem = self._fast_T_mem + self._fast_dt
             self._iu = self._fast_ctrl(t, s, obs_list)
-            assert self._iu.shape == (self._m,)
+            assert self._iu.shape == (self._control_dim,)
 
         return self._iv + self._iu

@@ -22,7 +22,7 @@ class Quadrotor:
 
                           1 ^ x
                             |
-                     y      |      
+                     y      |
                      4 <----o----> 2
                             |
                             |
@@ -176,7 +176,7 @@ class Quadrotor:
     def _Rwb(self, alpha: np.ndarray) -> np.ndarray:
         """
         Rotation matrix from BODY to WORLD frame.
-        
+
         Parameters
         ----------
         alpha: np.ndarray, shape=(3,)
@@ -285,7 +285,7 @@ class Quadrotor:
             ((Iy - Iz) * q * r) / Ix,
             ((Iz - Ix) * p * r) / Iy,
             ((Ix - Iy) * p * q) / Iz])
-        
+
         fdyn = np.hstack((do, dalpha, ddo_b, ddalpha_b))
         return fdyn
 
