@@ -1,15 +1,17 @@
-import numpy as np
-from scipy.optimize import minimize, LinearConstraint
-from scipy.signal import place_poles
 from abc import ABC, abstractmethod
-from typing import Callable, List
+from typing import Callable, List, Tuple
 
-from mpccbfs.quadrotor import Quadrotor
+import cvxpy as cp
+import numpy as np
+from scipy.optimize import LinearConstraint, minimize
+from scipy.signal import place_poles
+
 from mpccbfs.obstacles import Obstacle, SphereObstacle
-
+from mpccbfs.quadrotor import Quadrotor
 
 # constants
-g = 9.80665 # gravitational acceleration
+g = 9.80665  # gravitational acceleration
+
 
 class Controller(ABC):
     """
@@ -47,6 +49,7 @@ class Controller(ABC):
         Resets controller between runs.
         """
 
+
 class PDQuadController(Controller):
     """
     A simple PD controller for position control of a quadrotor.
@@ -62,7 +65,7 @@ class PDQuadController(Controller):
         kd_xyz: float,
         kp_a: float,
         kd_a: float,
-        ref: Callable[[float], np.ndarray]
+        ref: Callable[[float], np.ndarray],
     ) -> None:
         """
         Initialization for the quadrotor PD controller.
@@ -82,17 +85,17 @@ class PDQuadController(Controller):
             Assumes the desired pitch and roll are zero.
         """
 
-        assert kp_xyz >= 0.
-        assert kd_xyz >= 0.
-        assert kp_a >= 0.
-        assert kd_a >= 0.
+        assert kp_xyz >= 0.0
+        assert kd_xyz >= 0.0
+        assert kp_a >= 0.0
+        assert kd_a >= 0.0
 
         super(PDQuadController, self).__init__(12, 4)
 
         self._quad = quad
         self._sim_dt = sim_dt
-        self._kp_xyz = kp_xyz # xy pd gains
-        self._kd_xyz = kd_xyz # attitude pd gains
+        self._kp_xyz = kp_xyz  # xy pd gains
+        self._kd_xyz = kd_xyz  # attitude pd gains
         self._kp_a = kp_a
         self._kd_a = kd_a
         self._ref = ref
@@ -115,32 +118,40 @@ class PDQuadController(Controller):
 
         assert wsq_cand.shape == (4,)
 
-        if not any(wsq_cand < 0.):
+        if not any(wsq_cand < 0.0):
             return wsq_cand
 
         else:
             # recovering commanded correction values
-            D = np.array([         # cors -> wsq
-                [0., -1., -1, 1.],
-                [-1., 0., 1., 1.],
-                [0., 1., -1., 1.],
-                [1., 0., 1., 1.]])
-            invD = np.array([      # wsq -> cors
-                [0., -2., 0., 2.],
-                [-2., 0., 2., 0.],
-                [-1., 1., -1., 1],
-                [1., 1., 1., 1.]]) / 4.
-            cors = invD @ wsq_cand # (phi, theta, psi, z)
-
-            z_off = ( # gravity offset
-                (self._quad._invU @
-                    np.array([self._quad._m * g, 0., 0., 0.]))[0]
+            D = np.array(
+                [  # cors -> wsq
+                    [0.0, -1.0, -1, 1.0],
+                    [-1.0, 0.0, 1.0, 1.0],
+                    [0.0, 1.0, -1.0, 1.0],
+                    [1.0, 0.0, 1.0, 1.0],
+                ]
             )
-            z_cor = cors[0] # z correction
-            max_vio = np.max( # maximum non-negative violation occurs from here
+            invD = (
+                np.array(
+                    [  # wsq -> cors
+                        [0.0, -2.0, 0.0, 2.0],
+                        [-2.0, 0.0, 2.0, 0.0],
+                        [-1.0, 1.0, -1.0, 1],
+                        [1.0, 1.0, 1.0, 1.0],
+                    ]
+                )
+                / 4.0
+            )
+            cors = invD @ wsq_cand  # (phi, theta, psi, z)
+
+            z_off = (  # gravity offset
+                self._quad._invU @ np.array([self._quad._m * g, 0.0, 0.0, 0.0])
+            )[0]
+            z_cor = cors[0]  # z correction
+            max_vio = np.max(  # maximum non-negative violation occurs from here
                 (np.abs(cors[0]) + np.abs(cors[1])),
                 (np.abs(cors[0]) + np.abs(cors[2])),
-                (np.abs(cors[1]) + np.abs(cors[2]))
+                (np.abs(cors[1]) + np.abs(cors[2])),
             )
 
             vio_ratio = max_vio / z_cor
@@ -148,7 +159,7 @@ class PDQuadController(Controller):
             cors[0] = z_cor
             wsq = D @ cors
 
-            assert all(wsq >= 0.)
+            assert all(wsq >= 0.0)
             return wsq
 
     def ctrl(self, t: float, s: np.ndarray) -> np.ndarray:
@@ -208,15 +219,15 @@ class PDQuadController(Controller):
         e_psi = psi - psi_d
         e_z = z - z_d
 
-        z_off = ( # gravity offset
-            (self._quad._invU @ np.array([self._quad._m * g, 0., 0., 0.]))[0]
-        )
+        z_off = (  # gravity offset
+            self._quad._invU @ np.array([self._quad._m * g, 0.0, 0.0, 0.0])
+        )[0]
 
         phi_cor = -kp_a * e_phi - kd_a * p
         theta_cor = -kp_a * e_theta - kd_a * q
-        psi_cor = -kp_xyz * e_psi - kd_xyz * r # not too aggressive
-        z_cor = -kp_xyz * e_z - kd_xyz * w + z_off # gravity offset
-        z_cor = np.maximum(z_cor, 0.1) # minimum correction to avoid freefall
+        psi_cor = -kp_xyz * e_psi - kd_xyz * r  # not too aggressive
+        z_cor = -kp_xyz * e_z - kd_xyz * w + z_off  # gravity offset
+        z_cor = np.maximum(z_cor, 0.1)  # minimum correction to avoid freefall
 
         # rotor speed mixing law -> real inputs
         wsq = np.zeros(4)
@@ -238,6 +249,7 @@ class PDQuadController(Controller):
         """
         pass
 
+
 class MultirateQuadController(Controller):
     """
     A multirate controller for a quadrotor. Design from
@@ -256,11 +268,11 @@ class MultirateQuadController(Controller):
         slow_rate: float,
         fast_rate: float,
         lv_func: Callable[[float], float] = None,
-        c1: float = 1.,
-        c2: float = 1.,
+        c1: float = 1.0,
+        c2: float = 1.0,
         safe_dist: float = None,
         safe_rot: float = None,
-        safe_vel: float = None
+        safe_vel: float = None,
     ) -> None:
         """
         Initialization for the quadrotor multirate controller.
@@ -285,29 +297,29 @@ class MultirateQuadController(Controller):
             Safe linear velocity.
         """
 
-        assert slow_rate > 0.
-        assert fast_rate > 0.
-        assert safe_dist > 0.
-        assert safe_rot > 0.
-        assert safe_vel > 0.
-        assert c1 > 0.
-        assert c2 > 0.
+        assert slow_rate > 0.0
+        assert fast_rate > 0.0
+        assert safe_dist > 0.0
+        assert safe_rot > 0.0
+        assert safe_vel > 0.0
+        assert c1 > 0.0
+        assert c2 > 0.0
 
         super(MultirateQuadController, self).__init__(12, 4)
 
         self._quad = quad
 
         # time-related variables
-        self._slow_dt = 1. / slow_rate
-        self._fast_dt = 1. / fast_rate
-        self._sim_dt = self._fast_dt / 10.
+        self._slow_dt = 1.0 / slow_rate
+        self._fast_dt = 1.0 / fast_rate
+        self._sim_dt = self._fast_dt / 10.0
 
         # memory variables for control scheduling
         self._slow_T_mem = None
         self._fast_T_mem = None
-        self._iv = None    # ZOH slow control
-        self._iu = None    # ZOH fast control
-        self._s_bar = None # planned state
+        self._iv = None  # ZOH slow control
+        self._iu = None  # ZOH fast control
+        self._s_bar = None  # planned state
 
         # control design variables
         self._A = quad._A
@@ -324,7 +336,9 @@ class MultirateQuadController(Controller):
         self._safe_rot = safe_rot
         self._safe_vel = safe_vel
 
-    def _slow_ctrl(self, t: float, s: np.ndarray) -> np.ndarray:
+    def _slow_ctrl(
+        self, t: float, s: np.ndarray, obs_list: List[Obstacle]
+    ) -> np.ndarray:
         """
         Slow control law. Updates _s_bar internally using MPC. Trajectory
         generation strategy taken from
@@ -340,6 +354,8 @@ class MultirateQuadController(Controller):
             Time.
         s: np.ndarray, shape=(n,)
             State.
+        obs_list: List[Obstacle]
+            List of obstacles.
 
         Returns
         -------
@@ -351,16 +367,153 @@ class MultirateQuadController(Controller):
 
         # TODO: replace this with actual code. strategy: use linear hover
         # dynamics to plan stuff on a high level.
-        # print("slow: {}".format(t))
         iv = np.zeros(self._control_dim)
-        iv[0] = self._quad._m * g# + 1
+        iv[0] = self._quad._m * g
+
+        grav_dynamics = np.zeros(12)
+        grav_dynamics[-4] = -g
+
+        T = 5
+        target_position = np.array([0.1, 0.0, 0.5]) # <== this doesn't work
+        # target_position = np.array([0.0, 0.0, 0.5]) # <== this works
+
+        # Create state & control variables
+        states = cp.Variable((T, self._n))
+        controls = cp.Variable((T - 1, self._control_dim))
+
+        # Create objective
+        objective = cp.Minimize(
+            cp.sum_squares(states[-1, :3] - target_position)
+            + 0.1 * cp.sum_squares(states[:-1, :3] - states[1:, :3]) / T  # position delta
+            # + 0.1 * cp.sum_squares(states[:-1, 6:9] - states[1:, 6:9]) / T  # linear velocity delta
+            # + 0.1 * cp.sum_squares(states[:-1, 3:6] - states[1:, 3:6]) / T  # minimize position delta
+            + 0.01 * cp.sum_squares(states[:, 9:]) / T  # minimize angular velocities
+        )
+
+        # Create constraints
+        constraints = []
+
+        # > Initial condition
+        constraints.append(states[0] == s)
+        A = self._quad._A(s)
+        B = self._quad._B(s)
+        for time in range(T - 1):
+            # > Dynamics
+            constraints.append(
+                states[time + 1, :, None]
+                == states[time, :, None]
+                + self._slow_dt
+                * (
+                    A @ states[time, :, None]
+                    + B @ controls[time, :, None]
+                    + grav_dynamics[:, None]
+                )
+            )
+
+            # > Positive rotor speeds
+            constraints.append(self._quad._invU @ controls[time, :, None] >= 0.001)
+            constraints.append(self._quad._invU @ controls[time, :, None] <= 100.0)
+
+        problem = cp.Problem(objective, constraints)
+        problem.solve(solver=cp.SCS)
+        assert objective.value is not None
+
+        iv = controls.value[0]
+
+        # T = 5
+        # target_position = np.array([0.0, 0.3, 0.0])
+        #
+        # # Initial path to linearize around
+        # pos_bar = (
+        #     np.tile(s[None, :3], (T, 1))
+        #     + (target_position - s[:3])[None, :] * np.linspace(0.0, 0.1, T)[:, None]
+        # )
+        #
+        # assert pos_bar.shape == (T, 3)
+        # for i in range(20):
+        #     # Create state & control variables
+        #     states = cp.Variable((T, self._n))
+        #     controls = cp.Variable((T - 1, self._control_dim))
+        #
+        #     # Create objective
+        #     objective = cp.Minimize(
+        #         cp.sum_squares(states[-1, :3] - target_position) / T
+        #         # + 0.1 * cp.sum_squares(states[:-1, :3] - states[1:, :3]) / T  # position delta
+        #         # + 0.1 * cp.sum_squares(states[:-1, 6:9] - states[1:, 6:9]) / T  # linear velocity delta
+        #         # + 0.01 * cp.sum_squares(states[:-1, 3:6] - states[1:, 3:6])  # minimize position delta
+        #         # + 0.1 * cp.sum_squares(states[:, 9:]) / T  # minimize angular velocities
+        #     )
+        #
+        #     # Create constraints
+        #     constraints = []
+        #
+        #     # > Initial condition
+        #     constraints.append(states[0] == s)
+        #
+        #     # > Initial condition
+        #     # constraints.append(cp.norm(states[-1, :3] - target_position) <= 0.3)
+        #
+        #     for time in range(T - 1):
+        #         # > Dynamics
+        #         constraints.append(
+        #             states[time + 1, :, None]
+        #             == states[time, :, None]
+        #             + self._slow_dt
+        #             * (
+        #                 self._quad._A @ states[time, :, None]
+        #                 + self._quad._B @ controls[time, :, None]
+        #                 + grav_dynamics[:, None]
+        #             )
+        #         )
+        #
+        #         # > Positive rotor speeds
+        #         constraints.append(self._quad._invU @ controls[time, :, None] >= 0.001)
+        #         constraints.append(self._quad._invU @ controls[time, :, None] <= 100.0)
+        #
+        #     # > Obstacles (affine approximation for convex-concave procedure)
+        #     for obs in obs_list:
+        #         assert obs._otype == "sphere"
+        #
+        #         c_o = obs._c
+        #         r_o = obs._r  # obs radius
+        #         d_so = r_o + self._safe_dist  # obs safe distance
+        #
+        #         c_o = np.tile(c_o[None, :], (T, 1))
+        #
+        #         d = states[:, :3] - c_o
+        #         d_bar = pos_bar - c_o
+        #
+        #         # First timestep is fixed, so we can remove
+        #         d = d[1:]
+        #         d_bar = d_bar[1:]
+        #
+        #         constraints.append(
+        #             cp.sum(cp.square(d_bar), axis=1)
+        #             + (2 * cp.sum(cp.multiply(d_bar, d - d_bar), axis=1))
+        #             >= d_so ** 2
+        #         )
+        #
+        #
+        #     problem = cp.Problem(objective, constraints)
+        #     problem.solve(solver=cp.SCS)
+        #     assert objective.value is not None
+        #
+        #     old_pos_bar = pos_bar
+        #     pos_bar = states.value[:, :3]
+        #     if np.linalg.norm(old_pos_bar - pos_bar, ord=np.inf) < 1e-4:
+        #         print(f"\ttermination at {i}")
+        #         break
+
+        iv = controls.value[0]
+        print("slow: {}".format(t))
+        print("\tiv:", iv)
+        print("\tprops:", (self._quad._invU @ iv[:, None]).squeeze())
+        print("\tposition:", s[:3])
+
         return iv
 
     def _fast_ctrl(
-        self,
-        t: float,
-        s: np.ndarray,
-        obs_list: List[Obstacle]
+        self, t: float, s: np.ndarray, obs_list: List[Obstacle]
     ) -> np.ndarray:
         """
         Fast control law. Outputs deviation from _iv using CBFs.
@@ -379,23 +532,19 @@ class MultirateQuadController(Controller):
         iu: np.ndarray, shape=(m,)
             Control input.
         """
-
         assert s.shape == (self._n,)
 
         iv = self._iv
         safety_cons = self._get_quad_cons(self._quad, s, obs_list)
-        obj = lambda iu: np.linalg.norm(iu - iv) ** 2 # objective
+        obj = lambda iu: np.linalg.norm(iu - iv) ** 2  # objective
         sol = minimize(obj, np.zeros(4), constraints=safety_cons)
 
         iu = sol.x - iv
         return iu
 
     def _get_quad_cons(
-        self,
-        quad: Quadrotor,
-        s: np.ndarray,
-        obs_list: List[Obstacle]
-    ) -> LinearConstraint:
+        self, quad: Quadrotor, s: np.ndarray, obs_list: List[Obstacle]
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Computes the safety constraints for a quadrotor input in the current
         state. Lie derivatives computed using the symbolic helper function. For
@@ -453,8 +602,8 @@ class MultirateQuadController(Controller):
             # uninitialized ECBF gains
             self._K_vals = np.NaN * np.zeros((num_constr, 2))
 
-            F = np.array([[0., 1.], [0., 0.]])
-            G = np.array([0., 1.]).reshape((2, 1))
+            F = np.array([[0.0, 1.0], [0.0, 0.0]])
+            G = np.array([0.0, 1.0]).reshape((2, 1))
 
         # dynamics
         fdyn = quad._fdyn(s)
@@ -464,35 +613,39 @@ class MultirateQuadController(Controller):
         m = quad._m
         Ix, Iy, Iz = quad._I
 
-
         # linear velocity
-        h_v = v_s ** 2. - (u ** 2. + v ** 2. + w ** 2.)
-        lfh_v = 2. * g * (w * cphi * cth - u * sth + v * cth * sphi)
-        lgh_v = np.array([[-(2. * w) / m, 0., 0., 0.]])
+        h_v = v_s ** 2.0 - (u ** 2.0 + v ** 2.0 + w ** 2.0)
+        lfh_v = 2.0 * g * (w * cphi * cth - u * sth + v * cth * sphi)
+        lgh_v = np.array([[-(2.0 * w) / m, 0.0, 0.0, 0.0]])
 
         alpha_v = self._lv_func(h_v)
         A[0, :] = -lgh_v
         ub[0] = lfh_v + alpha_v
 
-
         # roll limits
-        h_phi = ang_s ** 2. - phi ** 2.
-        lfh_phi = -2. * phi * (p + r * cphi * tth + q * sphi * tth)
+        h_phi = ang_s ** 2.0 - phi ** 2.0
+        lfh_phi = -2.0 * phi * (p + r * cphi * tth + q * sphi * tth)
         lf2h_phi = (
-            (2. * p * phi * r * sphi * tth * (Ix - Iz)) / Iy -
-            (2. * phi * (r * cphi + q * sphi) *
-                (q * cphi - r * sphi)) / cth ** 2. -
-            (2. * phi * q * r * (Iy - Iz)) / Ix -
-            (2. * p * phi * q * cphi * tth * (Ix - Iy)) / Iz -
-            (p + r * cphi * tth + q * sphi * tth) *
-            (2. * p + 2. * phi * (q * cphi * tth - r * sphi * tth) +
-                2. * r * cphi * tth + 2. * q * sphi * tth)
+            (2.0 * p * phi * r * sphi * tth * (Ix - Iz)) / Iy
+            - (2.0 * phi * (r * cphi + q * sphi) * (q * cphi - r * sphi)) / cth ** 2.0
+            - (2.0 * phi * q * r * (Iy - Iz)) / Ix
+            - (2.0 * p * phi * q * cphi * tth * (Ix - Iy)) / Iz
+            - (p + r * cphi * tth + q * sphi * tth)
+            * (
+                2.0 * p
+                + 2.0 * phi * (q * cphi * tth - r * sphi * tth)
+                + 2.0 * r * cphi * tth
+                + 2.0 * q * sphi * tth
+            )
         )
-        lglfh_phi = np.array([
-            0.,
-            -(2. * phi) / Ix,
-            -(2. * phi * sphi * tth) / Iy,
-            -(2. * phi * cphi * tth) / Iz])
+        lglfh_phi = np.array(
+            [
+                0.0,
+                -(2.0 * phi) / Ix,
+                -(2.0 * phi * sphi * tth) / Iy,
+                -(2.0 * phi * cphi * tth) / Iz,
+            ]
+        )
 
         if any(np.isnan(self._K_vals[0, :])):
             ddh_nom = lf2h_phi + lglfh_phi @ self._iv
@@ -507,34 +660,29 @@ class MultirateQuadController(Controller):
         A[1, :] = -lglfh_phi
         ub[1] = K_phi @ np.array([h_phi, lfh_phi]) + lf2h_phi
 
-
         # pitch limits
-        h_th = ang_s ** 2. - theta ** 2.
-        lfh_th = -2. * theta * (q * cphi - r * sphi)
-        lf2h_th = (2. * theta * (r * cphi + q * sphi) *
-            (p + r * cphi * tth + q * sphi * tth) - (q * cphi - r * sphi) *
-            (2. * q * cphi - 2. * r * sphi) + (2. * p * r * theta * cphi *
-                (Ix - Iz)) / Iy + (2. * p * q * theta * sphi * (Ix - Iy)) / Iz
+        h_th = ang_s ** 2.0 - theta ** 2.0
+        lfh_th = -2.0 * theta * (q * cphi - r * sphi)
+        lf2h_th = (
+            2.0 * theta * (r * cphi + q * sphi) * (p + r * cphi * tth + q * sphi * tth)
+            - (q * cphi - r * sphi) * (2.0 * q * cphi - 2.0 * r * sphi)
+            + (2.0 * p * r * theta * cphi * (Ix - Iz)) / Iy
+            + (2.0 * p * q * theta * sphi * (Ix - Iy)) / Iz
         )
-        lglfh_th = np.array([
-            0.,
-            0.,
-            -(2. * theta * cphi) / Iy,
-            (2. * theta * sphi) / Iz])
+        lglfh_th = np.array(
+            [0.0, 0.0, -(2.0 * theta * cphi) / Iy, (2.0 * theta * sphi) / Iz]
+        )
 
         if any(np.isnan(self._K_vals[1, :])):
             ddh_nom = lf2h_th + lglfh_th @ self._iv
             l1 = np.minimum(lfh_th / h_th, -self._c1)
-            l2 = np.minimum(
-                (ddh_nom + l1 * lfh_th) / (lfh_th + l1 * h_th), -self._c2
-            )
+            l2 = np.minimum((ddh_nom + l1 * lfh_th) / (lfh_th + l1 * h_th), -self._c2)
             K_th = place_poles(F, G, np.array([l1, l2])).gain_matrix
             self._K_vals[1, :] = K_th
 
         K_th = self._K_vals[1, :]
         A[2, :] = -lglfh_th
         ub[2] = K_th @ np.array([h_th, lfh_th]) + lf2h_th
-
 
         # obstacles
         if obs_list is None:
@@ -543,28 +691,44 @@ class MultirateQuadController(Controller):
         for k_obs in range(len(obs_list)):
             obs = obs_list[k_obs]
 
-            if obs._otype == 'sphere':
+            if obs._otype == "sphere":
                 c_o = obs._c
-                x_o, y_o, z_o = c_o # obs center
-                r_o = obs._r        # obs radius
-                d_so = r_o + d_s    # obs safe distance
+                x_o, y_o, z_o = c_o  # obs center
+                r_o = obs._r  # obs radius
+                d_so = r_o + d_s  # obs safe distance
 
                 h_o = np.linalg.norm(np.array([x, y, z]) - c_o) ** 2 - d_so ** 2
-                lfh_o = (2. * (z - z_o) *
-                    (w * cphi * cth - u * sth + v * cth * sphi) +
-                    2. * (x - x_o) *
-                    (w * (sphi * spsi + cphi * cpsi * sth) -
-                        v * (cphi * spsi - cpsi * sphi * sth) +
-                        u * cpsi * cth) + 2. * (y - y_o) *
-                    (v * (cphi * cpsi + sphi * spsi * sth) -
-                        w * (cpsi * sphi - cphi * spsi * sth) + u * cth * spsi)
+                lfh_o = (
+                    2.0 * (z - z_o) * (w * cphi * cth - u * sth + v * cth * sphi)
+                    + 2.0
+                    * (x - x_o)
+                    * (
+                        w * (sphi * spsi + cphi * cpsi * sth)
+                        - v * (cphi * spsi - cpsi * sphi * sth)
+                        + u * cpsi * cth
+                    )
+                    + 2.0
+                    * (y - y_o)
+                    * (
+                        v * (cphi * cpsi + sphi * spsi * sth)
+                        - w * (cpsi * sphi - cphi * spsi * sth)
+                        + u * cth * spsi
+                    )
                 )
-                lf2h_o = 2. * (u ** 2 + v ** 2 + w ** 2 - g * (z - z_o))
-                lglfh_o = np.array([
-                    (2. * (x - x_o) * (sphi * spsi + cphi * cpsi * sth) -
-                        2. * (y - y_o) * (cpsi * sphi - cphi * spsi * sth) +
-                        cphi * cth * 2. * (z - z_o)) / m,
-                    0, 0, 0])
+                lf2h_o = 2.0 * (u ** 2 + v ** 2 + w ** 2 - g * (z - z_o))
+                lglfh_o = np.array(
+                    [
+                        (
+                            2.0 * (x - x_o) * (sphi * spsi + cphi * cpsi * sth)
+                            - 2.0 * (y - y_o) * (cpsi * sphi - cphi * spsi * sth)
+                            + cphi * cth * 2.0 * (z - z_o)
+                        )
+                        / m,
+                        0,
+                        0,
+                        0,
+                    ]
+                )
 
                 if any(np.isnan(self._K_vals[(k_obs + 2), :])):
                     ddh_nom = lf2h_o + lglfh_o @ self._iv
@@ -584,11 +748,10 @@ class MultirateQuadController(Controller):
 
         # non-negative rotor speed constraints
         A[-4:, :] = -self._quad._invU
-        ub[-4:] = 0.
+        ub[-4:] = -0.001
 
-        # constraint object
-        safety_cons = LinearConstraint(A, lb, ub)
-        return safety_cons
+        # Return constraint
+        return LinearConstraint(A, lb, ub)
 
     def reset(self) -> None:
         """
@@ -602,12 +765,7 @@ class MultirateQuadController(Controller):
         self._s_bar = None
         self._K_vals = None
 
-    def ctrl(
-        self,
-        t: float,
-        s: np.ndarray,
-        obs_list: List[Obstacle]
-    ) -> np.ndarray:
+    def ctrl(self, t: float, s: np.ndarray, obs_list: List[Obstacle]) -> np.ndarray:
         """
         Multirate control law.
 
@@ -633,7 +791,7 @@ class MultirateQuadController(Controller):
             self._slow_T_mem = t
             self._fast_T_mem = t
 
-            self._iv = self._slow_ctrl(t, s)
+            self._iv = self._slow_ctrl(t, s, obs_list)
             self._iu = self._fast_ctrl(t, s, obs_list)
 
             assert self._iv.shape == (self._control_dim,)
@@ -644,7 +802,7 @@ class MultirateQuadController(Controller):
         # slow control update
         if (t - self._slow_T_mem) > self._slow_dt:
             self._slow_T_mem = self._slow_T_mem + self._slow_dt
-            self._iv = self._slow_ctrl(t, s)
+            self._iv = self._slow_ctrl(t, s, obs_list)
             assert self._iv.shape == (self._control_dim,)
 
         # fast control update

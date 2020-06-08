@@ -217,7 +217,7 @@ class Quadrotor:
 
         phi, theta, psi = s[3:6]
         u, v, w = s[6:9]
-        p, q, r = s[10:12]
+        p, q, r = s[9:12]
 
         cphi = np.cos(phi)
         cth = np.cos(theta)
@@ -475,6 +475,7 @@ class Quadrotor:
             q = s[10]
 
             wsq = self._invU @ i
+            wsq[wsq < 0] = 0.0
             w = np.sqrt(wsq)
             w[0] *= -1
             w[2] *= -1

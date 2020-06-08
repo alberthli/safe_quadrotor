@@ -252,12 +252,13 @@ class SimulationEnvironment:
 
             anim = animation.FuncAnimation(
                 self._fig, _anim_quad, interval=(50 / 3.), frames=len(tsim))
-            plt.show()
 
             if anim_name is not None:
                 Writer = animation.writers['ffmpeg']
                 writer = Writer(fps=60, bitrate=1800)
                 anim.save('{}.mp4'.format(anim_name), writer=writer)
+
+            plt.show()
 
             self._clear_frame(clear_obs=True)
 
