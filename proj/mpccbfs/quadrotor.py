@@ -217,7 +217,7 @@ class Quadrotor:
 
         phi, theta, psi = s[3:6]
         u, v, w = s[6:9]
-        p, q, r = s[10:12]
+        p, q, r = s[9:12]
 
         cphi = np.cos(phi)
         cth = np.cos(theta)
@@ -243,7 +243,7 @@ class Quadrotor:
             sphi * spsi * sth, cphi * spsi * sth - cpsi * sphi])
         A[2, 3:9] = np.array([v * cphi * cth - w * cth * sphi, -u * cth -
             w * cphi * sth - v * sphi * sth, 0., -sth, cth * sphi, cphi * cth])
-        A[3, 3:5] = np.array([q * cphi * tth - r * sphi * tth, r * cphi * 
+        A[3, 3:5] = np.array([q * cphi * tth - r * sphi * tth, r * cphi *
             (tth ** 2. + 1.) + q * sphi * (tth ** 2. + 1.)])
         A[3, 9:12] = np.array([1., sphi * tth, cphi * tth])
         A[4, 3] = -r * cphi - q * sphi
