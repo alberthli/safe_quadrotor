@@ -34,12 +34,12 @@ f = [Rwb * [u;v;w];
      ((Iy - Iz) * q * r) / Ix;
      ((Iz - Ix) * p * r) / Iy;
      ((Ix - Iy) * p * q) / Iz];
-g = [zeros(8,4);
+gdyn = [zeros(8,4);
      1 / m, 0, 0, 0;
      0, 1 / Ix, 0, 0;
      0, 0, 1 / Iy, 0;
      0, 0, 0, 1 / Iz];
-
+ 
 %% linear velocity functions
 h_v = simplify(v_s^2 - norm([u;v;w])^2);
 dh_vds = simplify([diff(h_v,s(1));
@@ -55,7 +55,7 @@ dh_vds = simplify([diff(h_v,s(1));
                    diff(h_v,s(11));
                    diff(h_v,s(12))]);
 lfh_v = simplify(dh_vds' * f);
-lgh_v = simplify(dh_vds' * g);
+lgh_v = simplify(dh_vds' * gdyn);
 
 %% roll limit functions
 h_phi = ang_s^2 - phi^2;
@@ -85,7 +85,7 @@ dlfh_phids = simplify([diff(lfh_phi,s(1));
                        diff(lfh_phi,s(11));
                        diff(lfh_phi,s(12))]);
 lf2h_phi = simplify(dlfh_phids' * f);
-lglfh_phi = simplify(dlfh_phids' * g);
+lglfh_phi = simplify(dlfh_phids' * gdyn);
 
 %% pitch limit functions
 h_th = ang_s^2 - theta^2;
@@ -115,7 +115,7 @@ dlfh_thds = simplify([diff(lfh_th,s(1));
                       diff(lfh_th,s(11));
                       diff(lfh_th,s(12))]);
 lf2h_th = simplify(dlfh_thds' * f);
-lglfh_th = simplify(dlfh_thds' * g);
+lglfh_th = simplify(dlfh_thds' * gdyn);
 
 %% spherical obstacle constraints
 h_o = simplify(norm(s(1:3) - [x_o;y_o;z_o])^2 - d_s^2);
@@ -145,5 +145,5 @@ dlfh_ods = simplify([diff(lfh_o,s(1));
                      diff(lfh_o,s(11));
                      diff(lfh_o,s(12))]);
 lf2h_o = simplify(dlfh_ods' * f);
-lglfh_o = simplify(dlfh_ods' * g);
+lglfh_o = simplify(dlfh_ods' * gdyn);
 

@@ -130,49 +130,6 @@ class Quadrotor:
 
         return invU
 
-    @property
-    def _A(self) -> np.ndarray:
-        """Linearized autonomous dynamics about hover."""
-
-        A = np.zeros((12, 12))
-
-        A[0:3, 6:9] = np.eye(3)
-        A[3:6, 9:12] = np.eye(3)
-        A[6, 4] = g
-        A[7, 3] = -g
-
-        return A
-
-    @property
-    def _B(self) -> np.ndarray:
-        """Linearized control dynamics about hover."""
-
-        m = self._m
-        Ix, Iy, Iz = self._I
-        B = np.zeros((12, 4))
-
-        B[8, 0] = 1. / m
-        B[9, 1] = 1. / Ix
-        B[10, 2] = 1. / Iy
-        B[11, 3] = 1. / Iz
-
-        return B
-
-    @property
-    def _D(self) -> np.ndarray:
-        """Linearized disturbance dynamics about hover."""
-
-        m = self._m
-        Ix, Iy, Iz = self._I
-        D = np.zeros((12, 6))
-
-        D[6:9, 0:3] = np.eye(3) / m
-        D[9, 3] = 1. / Ix
-        D[10, 4] = 1. / Iy
-        D[11, 5] = 1. / Iz
-
-        return D
-
     def _Rwb(self, alpha: np.ndarray) -> np.ndarray:
         """
         Rotation matrix from BODY to WORLD frame.
@@ -238,6 +195,126 @@ class Quadrotor:
             [0., sphi / cth, cphi / cth]])
 
         return T
+
+    def _A(self, s: np.ndarray) -> np.ndarray:
+        """
+        Linearized autonomous dynamics about hover.
+
+        Parameters
+        ----------
+        s: np.ndarray, shape=(12,)
+            State.
+
+        Returns
+        -------
+        A: np.ndarray, shape=(12, 12)
+            Linearized autonomous dynamics about s.
+        """
+
+        assert s.shape == (12,)
+
+        Ix, Iy, Iz = self._I
+
+        phi, theta, psi = s[3:6]
+        u, v, w = s[6:9]
+        p, q, r = s[10:12]
+
+        cphi = np.cos(phi)
+        cth = np.cos(theta)
+        cpsi = np.cos(psi)
+        sphi = np.sin(phi)
+        sth = np.sin(theta)
+        spsi = np.sin(psi)
+        tth = np.tan(theta)
+
+        A = np.zeros((12, 12))
+
+        A[0, 3:9] = np.array([v * (sphi * spsi + cphi * cpsi * sth) +
+            w * (cphi * spsi - cpsi * sphi * sth),
+            w * cphi * cpsi * cth - u * cpsi * sth + v * cpsi * cth * sphi,
+            w * (cpsi * sphi - cphi * spsi * sth) - v * (cphi * cpsi +
+                sphi * spsi * sth) - u * cth * spsi, cpsi * cth,
+            cpsi * sphi * sth - cphi * spsi, sphi * spsi + cphi * cpsi * sth])
+        A[1, 3:9] = np.array([-v * (cpsi * sphi - cphi * spsi * sth) -
+            w * (cphi *cpsi + sphi * spsi * sth),
+            w * cphi * cth * spsi - u * spsi * sth + v * cth * sphi * spsi,
+            w * (sphi * spsi + cphi * cpsi * sth) - v * (cphi * spsi -
+                cpsi * sphi * sth) + u * cpsi * cth, cth*spsi, cphi*cpsi +
+            sphi * spsi * sth, cphi * spsi * sth - cpsi * sphi])
+        A[2, 3:9] = np.array([v * cphi * cth - w * cth * sphi, -u * cth -
+            w * cphi * sth - v * sphi * sth, 0., -sth, cth * sphi, cphi * cth])
+        A[3, 3:5] = np.array([q * cphi * tth - r * sphi * tth, r * cphi * 
+            (tth ** 2. + 1.) + q * sphi * (tth ** 2. + 1.)])
+        A[3, 9:12] = np.array([1., sphi * tth, cphi * tth])
+        A[4, 3] = -r * cphi - q * sphi
+        A[4, 10:12] = np.array([cphi, -sphi])
+        A[5, 3:5] = np.array([(q * cphi) / cth - (r * sphi) / cth,
+            (r * cphi * sth) / cth ** 2 + (q * sphi * sth) / cth ** 2])
+        A[5, 10:12] = np.array([sphi / cth, cphi / cth])
+        A[6, 4] = g * cth
+        A[6, 7:12] = np.array([r, -q, 0., -w, v])
+        A[7, 3:12] = np.array([-g * cphi * cth, g * sphi * sth,
+            0., -r, 0., p, w, 0., -u])
+        A[8, 3:12] = np.array([g * cth * sphi, g * cphi * sth,
+            0., q, -p, 0., -v, u, 0.])
+        A[9, 10:12] = np.array([(r * (Iy - Iz)) / Ix, (q * (Iy - Iz)) / Ix])
+        A[10, 9:12] = np.array([-(r * (Ix - Iz)) / Iy, 0.,
+            -(p * (Ix - Iz)) / Iy])
+        A[11, 9:11] = np.array([(q * (Ix - Iy)) / Iz, (p * (Ix - Iy)) / Iz])
+
+        return A
+
+    def _B(self, s: np.ndarray) -> np.ndarray:
+        """
+        Linearized control dynamics.
+
+        Parameters
+        ----------
+        s: np.ndarray, shape=(12,)
+            State. Unused.
+
+        Returns
+        -------
+        B: np.ndarray, shape=(12, 12)
+            Linearized control dynamics about s.
+        """
+
+        m = self._m
+        Ix, Iy, Iz = self._I
+        B = np.zeros((12, 4))
+
+        B[8, 0] = 1. / m
+        B[9, 1] = 1. / Ix
+        B[10, 2] = 1. / Iy
+        B[11, 3] = 1. / Iz
+
+        return B
+
+    def _D(self) -> np.ndarray:
+        """
+        Linearized disturbance dynamics in BODY frame.
+
+        Parameters
+        ----------
+        s: np.ndarray, shape=(12,)
+            State. Unused.
+
+        Returns
+        -------
+        B: np.ndarray, shape=(12, 12)
+            Linearized disturbance dynamics about s.
+        """
+
+        m = self._m
+        Ix, Iy, Iz = self._I
+        D = np.zeros((12, 6))
+
+        D[6:9, 0:3] = np.eye(3) / m
+        D[9, 3] = 1. / Ix
+        D[10, 4] = 1. / Iy
+        D[11, 5] = 1. / Iz
+
+        return D
 
     def _fdyn(self, s: np.ndarray) -> np.ndarray:
         """
@@ -324,7 +401,8 @@ class Quadrotor:
 
     def _wdyn(self, d: np.ndarray) -> np.ndarray:
         """
-        Quadrotor disturbance dynamics.
+        Quadrotor disturbance dynamics in BODY frame. Global disturbances must
+        first be rotated into the body frame.
 
         Parameters
         ----------
