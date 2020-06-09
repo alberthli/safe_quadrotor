@@ -370,19 +370,21 @@ class MultirateQuadController(Controller):
         iv = np.zeros(self._control_dim)
         iv[0] = self._quad._m * g
 
-        grav_dynamics = np.zeros(12)
-        grav_dynamics[-4] = -g
+        def grav_dynamics(s):
+            v = np.zeros(12)
+            v[6:9] = (self._quad._Rwb(s[3:6]).T @ np.array([[0, 0, -g]]).T).squeeze()
+            return v
 
         T = 5
-        target_position = np.array([0.1, 0.0, 0.0])  # <== this doesn't work
+        target_position = np.array([0.0, 0.0, 0.0])  # <== this doesn't work
         # target_position = np.array([0.0, 0.0, 0.5]) # <== this works
 
         # Initial states to linearize around
         states_bar = np.zeros((T, self._n))
         states_bar[0] = s
         for time in range(T - 1):
-            states_bar[time + 1] = states_bar[time] + self._slow_dt * self._fdyn(
-                states_bar[time]
+            states_bar[time + 1] = states_bar[time] + self._slow_dt * (
+                self._fdyn(states_bar[time]) + grav_dynamics(states_bar[time])
             )
 
         for i in range(20):
@@ -418,12 +420,12 @@ class MultirateQuadController(Controller):
                     * (
                         A @ states[time, :, None]
                         + B @ controls[time, :, None]
-                        + grav_dynamics[:, None]
+                        + grav_dynamics(states_bar[time])[:, None]
                     )
                 )
 
                 # > Positive rotor speeds
-                constraints.append(self._quad._invU @ controls[time, :, None] >= 0)
+                constraints.append(self._quad._invU @ controls[time, :, None] >= 0.001)
                 # constraints.append(self._quad._invU @ controls[time, :, None] <= 100.0)
 
             # > Velocity limits?

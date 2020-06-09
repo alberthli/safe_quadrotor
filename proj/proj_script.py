@@ -30,7 +30,7 @@ TODO
 fannypack.utils.pdb_safety_net()
 
 # QUADROTOR #
-m = 0.1                    # mass
+m = 1.                     # mass
 I = np.array([1., 1., 1.]) # principal moments of inertia
 kf = 1.                    # thrust factor
 km = 1.                    # drag factor
