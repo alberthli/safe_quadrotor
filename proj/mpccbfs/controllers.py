@@ -438,11 +438,12 @@ class MultirateQuadController(Controller):
             # )
 
             # > Trust region
-            constraints.append(
-                cp.norm(states[3:] - states_bar[3:], p="inf")
-                <= 0.2
-                # cp.norm(states[-1] - s, p="inf") <= 0.3
-            )
+            if i > 5:
+                constraints.append(
+                    cp.norm(states[3:] - states_bar[3:], p="inf")
+                    <= 0.1
+                    # cp.norm(states[-1] - s, p="inf") <= 0.3
+                )
 
             problem = cp.Problem(objective, constraints)
             problem.solve(solver=cp.SCS)
@@ -452,6 +453,7 @@ class MultirateQuadController(Controller):
             states_bar = states.value
 
         iv = controls.value[0]
+        assert np.all(self._quad._invU @ iv[:, None] >= -1e-8)
 
         # T = 5
         # target_position = np.array([0.0, 0.3, 0.0])
@@ -784,7 +786,7 @@ class MultirateQuadController(Controller):
 
         # non-negative rotor speed constraints
         A[-4:, :] = -self._quad._invU
-        ub[-4:] = 0.0
+        ub[-4:] = -1e-4
 
         # Return constraint
         return LinearConstraint(A, lb, ub)
