@@ -86,7 +86,7 @@ pdc = PDQuadController(
 # OBSTACLES #
 obs_list = []
 obs1 = SphereObstacle(
-    np.array([0.2, 0.0, 0.3]), # position
+    np.array([0.0, 0.15, 0.3]), # position
     0.1                      # radius
 )
 obs_list = [obs1]
@@ -106,7 +106,7 @@ simulator = SimulationEnvironment(
 if __name__ == "__main__":
     s0 = np.zeros(12) # initial state
     s0[5] = 1 # initial yaw
-    tsim = np.linspace(0, 5, 101) # query times
+    tsim = np.linspace(0, 10, 101) # query times
     sim_data = simulator.simulate(
         s0,
         tsim,
