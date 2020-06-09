@@ -373,19 +373,23 @@ class MultirateQuadController(Controller):
         def grav_dynamics(s):
             v = np.zeros(12)
             v[6:9] = (self._quad._Rwb(s[3:6]).T @ np.array([[0, 0, -g]]).T).squeeze()
+            # v[6:9] = (np.array([[0, 0, -g]]).T).squeeze()
             return v
 
         T = 5
-        target_position = np.array([0.0, 0.0, 0.0])  # <== this doesn't work
+        target_position = np.array([0.2, 0.0, 0.0])  # <== this doesn't work
         # target_position = np.array([0.0, 0.0, 0.5]) # <== this works
 
         # Initial states to linearize around
         states_bar = np.zeros((T, self._n))
-        states_bar[0] = s
-        for time in range(T - 1):
-            states_bar[time + 1] = states_bar[time] + self._slow_dt * (
-                self._fdyn(states_bar[time]) + grav_dynamics(states_bar[time])
-            )
+        states_bar[:] = s
+        # states_bar = np.zeros((T, self._n))
+        # states_bar[0] = s
+        # for time in range(T - 1):
+        #     states_bar[time] = s
+        #     # states_bar[time + 1] = states_bar[time] + self._slow_dt * (
+        #     #     self._fdyn(states_bar[time]) + grav_dynamics(states_bar[time])
+        #     # )
 
         for i in range(20):
             # Create state & control variables
@@ -395,7 +399,7 @@ class MultirateQuadController(Controller):
             # Create objective
             objective = cp.Minimize(
                 cp.sum_squares(states[-1, :3] - target_position)
-                # + 0.1 * cp.sum_squares(states[-1, 6:])  # zero velocity
+                + 0.1 * cp.sum_squares(states[-1, 6:])  # zero velocity
                 # + 0.1 * cp.sum_squares(states[:-1, :3] - states[1:, :3]) / (T - 1)  # position delta
                 # + 0.2 * cp.sum_squares(states[:-1, 3:5]) / (T - 1)
                 # + 0.1 * cp.sum_squares(states[1:, 6:9]) / T  # minimize linear velocities
@@ -436,7 +440,7 @@ class MultirateQuadController(Controller):
             # > Trust region
             constraints.append(
                 cp.norm(states[3:] - states_bar[3:], p="inf")
-                <= 0.1
+                <= 0.2
                 # cp.norm(states[-1] - s, p="inf") <= 0.3
             )
 

@@ -475,7 +475,8 @@ class Quadrotor:
             q = s[10]
 
             wsq = self._invU @ i
-            assert np.all(wsq >= 0.0)
+            assert np.all(wsq >= -1e-8)
+            wsq[wsq <= 0.0] = 0.0
             w = np.sqrt(wsq)
             w[0] *= -1
             w[2] *= -1
