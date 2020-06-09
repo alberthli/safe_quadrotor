@@ -374,49 +374,76 @@ class MultirateQuadController(Controller):
         grav_dynamics[-4] = -g
 
         T = 5
-        target_position = np.array([0.1, 0.0, 0.5]) # <== this doesn't work
+        target_position = np.array([0.1, 0.0, 0.0])  # <== this doesn't work
         # target_position = np.array([0.0, 0.0, 0.5]) # <== this works
 
-        # Create state & control variables
-        states = cp.Variable((T, self._n))
-        controls = cp.Variable((T - 1, self._control_dim))
-
-        # Create objective
-        objective = cp.Minimize(
-            cp.sum_squares(states[-1, :3] - target_position)
-            + 0.1 * cp.sum_squares(states[:-1, :3] - states[1:, :3]) / T  # position delta
-            # + 0.1 * cp.sum_squares(states[:-1, 6:9] - states[1:, 6:9]) / T  # linear velocity delta
-            # + 0.1 * cp.sum_squares(states[:-1, 3:6] - states[1:, 3:6]) / T  # minimize position delta
-            + 0.01 * cp.sum_squares(states[:, 9:]) / T  # minimize angular velocities
-        )
-
-        # Create constraints
-        constraints = []
-
-        # > Initial condition
-        constraints.append(states[0] == s)
-        A = self._quad._A(s)
-        B = self._quad._B(s)
+        # Initial states to linearize around
+        states_bar = np.zeros((T, self._n))
+        states_bar[0] = s
         for time in range(T - 1):
-            # > Dynamics
-            constraints.append(
-                states[time + 1, :, None]
-                == states[time, :, None]
-                + self._slow_dt
-                * (
-                    A @ states[time, :, None]
-                    + B @ controls[time, :, None]
-                    + grav_dynamics[:, None]
-                )
+            states_bar[time + 1] = states_bar[time] + self._slow_dt * self._fdyn(
+                states_bar[time]
             )
 
-            # > Positive rotor speeds
-            constraints.append(self._quad._invU @ controls[time, :, None] >= 0.001)
-            constraints.append(self._quad._invU @ controls[time, :, None] <= 100.0)
+        for i in range(20):
+            # Create state & control variables
+            states = cp.Variable((T, self._n))
+            controls = cp.Variable((T - 1, self._control_dim))
 
-        problem = cp.Problem(objective, constraints)
-        problem.solve(solver=cp.SCS)
-        assert objective.value is not None
+            # Create objective
+            objective = cp.Minimize(
+                cp.sum_squares(states[-1, :3] - target_position)
+                # + 0.1 * cp.sum_squares(states[-1, 6:])  # zero velocity
+                # + 0.1 * cp.sum_squares(states[:-1, :3] - states[1:, :3]) / (T - 1)  # position delta
+                # + 0.2 * cp.sum_squares(states[:-1, 3:5]) / (T - 1)
+                # + 0.1 * cp.sum_squares(states[1:, 6:9]) / T  # minimize linear velocities
+                # + 0.1 * cp.sum_squares(states[:-1, 3:6] - states[1:, 3:6]) / T  # minimize position delta
+                # + 0.01 * cp.sum_squares(states[:, 9:]) / T  # minimize angular velocities
+            )
+
+            # Create constraints
+            constraints = []
+
+            # > Initial condition
+            constraints.append(states[0] == s)
+            for time in range(T - 1):
+                A = self._quad._A(states_bar[time])
+                B = self._quad._B(states_bar[time])
+
+                # > Dynamics
+                constraints.append(
+                    states[time + 1, :, None]
+                    == states[time, :, None]
+                    + self._slow_dt
+                    * (
+                        A @ states[time, :, None]
+                        + B @ controls[time, :, None]
+                        + grav_dynamics[:, None]
+                    )
+                )
+
+                # > Positive rotor speeds
+                constraints.append(self._quad._invU @ controls[time, :, None] >= 0)
+                # constraints.append(self._quad._invU @ controls[time, :, None] <= 100.0)
+
+            # > Velocity limits?
+            # constraints.append(
+            #     cp.abs(states[:, 6:]) <= max(0.1, 1 * np.max(np.abs(s[6:])))
+            # )
+
+            # > Trust region
+            constraints.append(
+                cp.norm(states[3:] - states_bar[3:], p="inf")
+                <= 0.1
+                # cp.norm(states[-1] - s, p="inf") <= 0.3
+            )
+
+            problem = cp.Problem(objective, constraints)
+            problem.solve(solver=cp.SCS)
+            assert objective.value is not None
+            print(i, end="", flush=True)
+
+            states_bar = states.value
 
         iv = controls.value[0]
 
@@ -508,7 +535,10 @@ class MultirateQuadController(Controller):
         print("slow: {}".format(t))
         print("\tiv:", iv)
         print("\tprops:", (self._quad._invU @ iv[:, None]).squeeze())
-        print("\tposition:", s[:3])
+        print("\tlvelocity:", s[6:9])
+        print("\trvelocity:", s[9:12])
+        print("\tlposition:", s[:3])
+        print("\trposition:", s[3:6])
 
         return iv
 
@@ -748,7 +778,7 @@ class MultirateQuadController(Controller):
 
         # non-negative rotor speed constraints
         A[-4:, :] = -self._quad._invU
-        ub[-4:] = -0.001
+        ub[-4:] = 0.0
 
         # Return constraint
         return LinearConstraint(A, lb, ub)
