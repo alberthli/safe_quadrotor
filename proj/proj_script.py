@@ -86,10 +86,10 @@ pdc = PDQuadController(
 # OBSTACLES #
 obs_list = []
 obs1 = SphereObstacle(
-    np.array([0.2, 0.0, -0.5]), # position
+    np.array([0.2, 0.0, 0.3]), # position
     0.1                      # radius
 )
-# obs_list = [obs1]
+obs_list = [obs1]
 
 
 # SIMULATOR #

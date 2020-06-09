@@ -376,9 +376,8 @@ class MultirateQuadController(Controller):
             # v[6:9] = (np.array([[0, 0, -g]]).T).squeeze()
             return v
 
-        T = 5
-        target_position = np.array([0.2, 0.0, 0.0])  # <== this doesn't work
-        # target_position = np.array([0.0, 0.0, 0.5]) # <== this works
+        T = 20
+        target_position = np.array([0, 0, 0.6])
 
         # Initial states to linearize around
         states_bar = np.zeros((T, self._n))
@@ -399,8 +398,8 @@ class MultirateQuadController(Controller):
             # Create objective
             objective = cp.Minimize(
                 cp.sum_squares(states[-1, :3] - target_position)
-                + 0.1 * cp.sum_squares(states[-1, 6:])  # zero velocity
-                # + 0.1 * cp.sum_squares(states[:-1, :3] - states[1:, :3]) / (T - 1)  # position delta
+                # + 0.1 * cp.sum_squares(states[-1, 6:])  # zero velocity
+                + 0.1 * cp.sum_squares(states[:-1, :3] - states[1:, :3]) / (T - 1)  # position delta
                 # + 0.2 * cp.sum_squares(states[:-1, 3:5]) / (T - 1)
                 # + 0.1 * cp.sum_squares(states[1:, 6:9]) / T  # minimize linear velocities
                 # + 0.1 * cp.sum_squares(states[:-1, 3:6] - states[1:, 3:6]) / T  # minimize position delta
@@ -409,6 +408,13 @@ class MultirateQuadController(Controller):
 
             # Create constraints
             constraints = []
+
+            # > Positive rotor speeds
+            for time in range(T - 1):
+                constraints.append(
+                    self._quad._invU @ controls[time, :, None] - 0.00001 >= 0
+                )
+                # constraints.append(self._quad._invU @ controls[time, :, None] <= 100.0)
 
             # > Initial condition
             constraints.append(states[0] == s)
@@ -428,22 +434,42 @@ class MultirateQuadController(Controller):
                     )
                 )
 
-                # > Positive rotor speeds
-                constraints.append(self._quad._invU @ controls[time, :, None] >= 0.001)
-                # constraints.append(self._quad._invU @ controls[time, :, None] <= 100.0)
-
             # > Velocity limits?
             # constraints.append(
             #     cp.abs(states[:, 6:]) <= max(0.1, 1 * np.max(np.abs(s[6:])))
             # )
 
             # > Trust region
-            if i > 5:
+            # if i > 5:
+            #     constraints.append(
+            #         cp.norm(states[3:] - states_bar[3:], p="inf")
+            #         <= (0.1 if i > 15 else 0.5)
+            #         # cp.norm(states[-1] - s, p="inf") <= 0.3
+            #     )
+
+            # > Obstacles (affine approximation for convex-concave procedure)
+            for obs in obs_list:
+                assert obs._otype == "sphere"
+
+                c_o = obs._c
+                r_o = obs._r  # obs radius
+                d_so = r_o + self._safe_dist  # obs safe distance
+
+                c_o = np.tile(c_o[None, :], (T, 1))
+
+                d = states[:, :3] - c_o
+                d_bar = states_bar[:, :3] - c_o
+
+                # First timestep is fixed, so we can remove
+                d = d[1:]
+                d_bar = d_bar[1:]
+
                 constraints.append(
-                    cp.norm(states[3:] - states_bar[3:], p="inf")
-                    <= 0.1
-                    # cp.norm(states[-1] - s, p="inf") <= 0.3
+                    cp.sum(cp.square(d_bar), axis=1)
+                    + (2 * cp.sum(cp.multiply(d_bar, d - d_bar), axis=1))
+                    >= d_so ** 2
                 )
+
 
             problem = cp.Problem(objective, constraints)
             problem.solve(solver=cp.SCS)
@@ -453,7 +479,7 @@ class MultirateQuadController(Controller):
             states_bar = states.value
 
         iv = controls.value[0]
-        assert np.all(self._quad._invU @ iv[:, None] >= -1e-8)
+        # if assert np.all(self._quad._invU @ iv[:, None] >= -1e-4)
 
         # T = 5
         # target_position = np.array([0.0, 0.3, 0.0])
@@ -571,6 +597,7 @@ class MultirateQuadController(Controller):
             Control input.
         """
         assert s.shape == (self._n,)
+        return np.zeros_like(self._iv)
 
         iv = self._iv
         safety_cons = self._get_quad_cons(self._quad, s, obs_list)
