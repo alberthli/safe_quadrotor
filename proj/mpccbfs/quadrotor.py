@@ -1,6 +1,6 @@
-import numpy as np
-from typing import List, Callable
+from typing import Callable, List
 
+import numpy as np
 
 # constants
 g = 9.80665 # gravitational acceleration
@@ -475,6 +475,8 @@ class Quadrotor:
             q = s[10]
 
             wsq = self._invU @ i
+            assert np.all(wsq >= -1e-4)
+            wsq[wsq <= 0.0] = 0.0
             w = np.sqrt(wsq)
             w[0] *= -1
             w[2] *= -1

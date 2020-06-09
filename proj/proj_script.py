@@ -1,5 +1,7 @@
 import numpy as np
 
+import fannypack
+
 from mpccbfs.quadrotor import Quadrotor
 from mpccbfs.simulator import SimulationEnvironment
 from mpccbfs.controllers import MultirateQuadController, PDQuadController
@@ -24,6 +26,8 @@ TODO
 
 - Maybe: look for niche 3d aspect ratio workaround so spheres look proper
 """
+
+fannypack.utils.pdb_safety_net()
 
 # QUADROTOR #
 m = 1.                     # mass
@@ -80,8 +84,9 @@ pdc = PDQuadController(
 
 
 # OBSTACLES #
+obs_list = []
 obs1 = SphereObstacle(
-    np.array([0., 0., 0.3]), # position
+    np.array([0.0, 0.15, 0.3]), # position
     0.1                      # radius
 )
 obs_list = [obs1]
@@ -107,5 +112,5 @@ if __name__ == "__main__":
         tsim,
         dfunc=None,    # disturbance function
         animate=True,
-        anim_name=None # 'NAME.mp4' to save the run
+        anim_name="diverge" # 'NAME.mp4' to save the run
     )
