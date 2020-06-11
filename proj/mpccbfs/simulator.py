@@ -11,6 +11,7 @@ from mpccbfs.quadrotor import Quadrotor
 from mpccbfs.controllers import Controller, MultirateQuadController
 from mpccbfs.obstacles import Obstacle, SphereObstacle
 
+from mpccbfs.multiratePD import MultiratePD
 
 class SimulationEnvironment:
     """
@@ -123,6 +124,30 @@ class SimulationEnvironment:
         self._draw_circle(r3o, l / 2., ro)
         self._draw_circle(r4o, l / 2., ro)
 
+    def _draw_traj(self, s_sol, ref_traj, i) -> None:
+        """
+        Function for drawing the reference traj and the quadcopter traj. 
+
+        Parameters
+        ----------
+        s_sol: np.ndarray, shape=(12, T)
+
+        ref_traj: np.ndarray, shape=(4, T)
+
+        i: int
+        """
+
+        assert s_sol[:,0].shape == (12,)
+
+        ax = self._ax
+
+        # Plot quadcopter traj
+        ax.plot(s_sol[0, :i+1], s_sol[1, :i+1], s_sol[2, :i+1], 'c--')
+
+        # Plot reference traj
+        ax.plot(ref_traj[0, :i+1], ref_traj[1, :i+1], ref_traj[2, :i+1], 'm--')
+        ax.plot(ref_traj[0, i:i+1], ref_traj[1, i:i+1], ref_traj[2, i:i+1], '.m')
+
     def _draw_obs(self) -> None:
         """
         Draws obstacles in the environment.
@@ -223,6 +248,8 @@ class SimulationEnvironment:
         # controller
         if type(self._ctrler) == MultirateQuadController:
             ctrl = lambda t, s: self._ctrler.ctrl(t, s, self._obs_list)
+        elif type(self._ctrler) == MultiratePD:
+            ctrl = lambda t, s: self._ctrler.ctrl(t, s, self._obs_list)
         else:
             ctrl = lambda t, s: self._ctrler.ctrl(t, s)
 
@@ -240,6 +267,15 @@ class SimulationEnvironment:
             t_eval=tsim,
             max_step=self._ctrler._sim_dt) # cap framerate of reality
         s_sol = sol.y
+
+        # Get ref traj for plotting
+        if type(self._ctrler) == MultiratePD:
+            ctrler = self._ctrler
+            ref = ctrler._ref
+            ref_traj = np.zeros((4, s_sol.shape[1]))
+            for i in range(s_sol.shape[1]):
+                ref_traj[:,i] = ref(tsim[i])
+
         self._ctrler.reset()
 
         # animation
@@ -249,6 +285,9 @@ class SimulationEnvironment:
             def _anim_quad(i):
                 self._clear_frame()
                 self._draw_quad(s_sol[:, i])
+
+                if type(self._ctrler) == MultiratePD:
+                    self._draw_traj(s_sol, ref_traj, i)
 
             anim = animation.FuncAnimation(
                 self._fig, _anim_quad, interval=(50 / 3.), frames=len(tsim))
