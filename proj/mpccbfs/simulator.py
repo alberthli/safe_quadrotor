@@ -269,12 +269,11 @@ class SimulationEnvironment:
         s_sol = sol.y
 
         # Get ref traj for plotting
-        if type(self._ctrler) == MultiratePD:
-            ctrler = self._ctrler
-            ref = ctrler._ref
-            ref_traj = np.zeros((4, s_sol.shape[1]))
-            for i in range(s_sol.shape[1]):
-                ref_traj[:,i] = ref(tsim[i])
+        ctrler = self._ctrler
+        ref = ctrler._ref
+        ref_traj = np.zeros((4, s_sol.shape[1]))
+        for i in range(s_sol.shape[1]):
+            ref_traj[:,i] = ref(tsim[i])
 
         self._ctrler.reset()
 
@@ -285,9 +284,7 @@ class SimulationEnvironment:
             def _anim_quad(i):
                 self._clear_frame()
                 self._draw_quad(s_sol[:, i])
-
-                if type(self._ctrler) == MultiratePD:
-                    self._draw_traj(s_sol, ref_traj, i)
+                self._draw_traj(s_sol, ref_traj, i)
 
             anim = animation.FuncAnimation(
                 self._fig, _anim_quad, interval=(50 / 3.), frames=len(tsim))

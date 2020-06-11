@@ -267,6 +267,7 @@ class MultirateQuadController(Controller):
         quad: Quadrotor,
         slow_rate: float,
         fast_rate: float,
+        ref: Callable[[float], np.ndarray],
         lv_func: Callable[[float], float] = None,
         c1: float = 1.0,
         c2: float = 1.0,
@@ -285,6 +286,9 @@ class MultirateQuadController(Controller):
             Rate of operation of the slow controller in Hz.
         fast_rate: float
             Rate of operation of the fast controller in Hz.
+        ref: Callable[[float], np.ndarray]
+            Reference function. Takes in time, outputs desired (x, y, z, psi).
+            Assumes the desired pitch and roll are zero.
         lv_func: Callable[[float], float]
             Linear velocity class-K function for CBF controller.
         c1, c2: float
@@ -336,6 +340,8 @@ class MultirateQuadController(Controller):
         self._safe_rot = safe_rot
         self._safe_vel = safe_vel
 
+        self._ref = ref
+
     def _slow_ctrl(
         self, t: float, s: np.ndarray, obs_list: List[Obstacle]
     ) -> np.ndarray:
@@ -377,7 +383,11 @@ class MultirateQuadController(Controller):
             return v
 
         T = 20
-        target_position = np.array([0, 0, 0.6])
+
+        # Reference traj
+        ref = self._ref(t)
+        x_d, y_d, z_d, psi_d = ref
+        target_position = np.array([x_d, y_d, z_d])
 
         # Initial states to linearize around
         states_bar = np.zeros((T, self._n))

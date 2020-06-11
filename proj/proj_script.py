@@ -2,7 +2,7 @@ import numpy as np
 
 from mpccbfs.quadrotor import Quadrotor
 from mpccbfs.simulator import SimulationEnvironment
-from mpccbfs.controllers import PDQuadController
+from mpccbfs.controllers import PDQuadController, MultirateQuadController
 from mpccbfs.multiratePD import MultiratePD
 from mpccbfs.obstacles import Obstacle, SphereObstacle
 
@@ -41,8 +41,8 @@ kd_xyz = 0.04
 kp_a = 10     # gains for attitude control
 kd_a = 5
 # ref = lambda t: np.array([0.3 * np.cos(0.2*t), 0.3 * np.sin(0.2*t), 0.05*t, 0]) # reference
-# ref = lambda t: np.array([1, 0, 0, 0]) # reference
-ref = lambda t: np.array([1, 0, 1, 0]) # reference
+ref = lambda t: np.array([1, 0, 0, 0]) # reference
+# ref = lambda t: np.array([1, 0, 1, 0]) # reference
 
 pdc = PDQuadController(
     quad,
@@ -78,6 +78,20 @@ mrpdc = MultiratePD(
     c2,
     safe_dist,
     safe_rot,
+    safe_vel
+)
+
+# Multirate MPC # 
+mrmpc = MultirateQuadController(
+    quad,
+    slow_rate,
+    fast_rate,
+    ref,
+    lv_func,
+    c1,
+    c2,
+    safe_dist,
+    safe_rot,
     safe_vel,
 )
 
@@ -96,15 +110,15 @@ obs3 = SphereObstacle(
     0.1                      # radius
 )
 bigObs = SphereObstacle(np.array([0.5, 0., 0.]), 0.2)
-obs_list = [bigObs]
+# obs_list = [bigObs]
 # obs_list = [obs1, obs2, obs3]
-# obs_list = []
+obs_list = []
 
 
 # SIMULATOR #
 simulator = SimulationEnvironment(
     quad,     # quadcopter
-    mrpdc,    # controller
+    mrmpc,    # mcontroller
     obs_list, # obstacle list
     (-1, 1),  # xyz limits
     (-1, 1),
@@ -113,12 +127,12 @@ simulator = SimulationEnvironment(
 
 if __name__ == "__main__":
     s0 = np.zeros(12) # initial state
-    s0[5] = 1 # initial yaw
-    tsim = np.linspace(0, 20, 101) # query times
+    s0[5] = 0 #1 # initial yaw
+    tsim = np.linspace(0, 5, 101) # query times
     sim_data = simulator.simulate(
         s0,
         tsim,
         dfunc=None,    # disturbance function
         animate=True,
-        anim_name='multiratePD_test.mp4' # 'NAME.mp4' to save the run
+        anim_name="mpc_testing.mp4" # 'NAME.mp4' to save the run
     )
