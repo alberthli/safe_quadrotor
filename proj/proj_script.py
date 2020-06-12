@@ -38,33 +38,27 @@ quad = Quadrotor(m, I, kf, km, l, Jtp)
 
 # CONTROLLERS #
 
-# multirate controller - TODO: write the slow update
+# multirate controller
 slow_rate = 10.       # slow controller rate
 fast_rate = 100.      # fast controller rate
-lv_func = lambda x: 0.0001 * x # class-K function for relative degree 1 constraints
-c1 = 0.005               # limits for ECBF pole placement
-c2 = 0.01
+lv_func = lambda x: x # class-K function for relative degree 1 constraints
+c1 = 20.               # limits for ECBF pole placement
+c2 = 50.
 safe_dist = 0.05      # safe distance from obstacles
-safe_rot = 0.1      # safe rotation angle (rad)
-safe_vel = 100.        # safe linear velocity
-mpc_T = 5             # MPC planning steps
+safe_rot = 0.025      # safe rotation angle (rad)
+safe_vel = 5.        # safe linear velocity
+mpc_T = 4             # MPC planning steps
 mpc_P = np.eye(12)          # terminal cost - None means DARE solution
-mpc_P[0:3, 0:3] *= 5
+mpc_P[0:6, 0:6] *= 25
 mpc_Q = np.eye(12)    # state cost
-mpc_Q[0:3, 0:3] *= 5
+mpc_Q[0:6, 0:6] *= 25
 mpc_R = 0.01 * np.eye(4)     # control cost
-ref = lambda t: np.array([
-    1., 0., 0.,
-    0., 0., 0.,
-    0., 0., 0.,
-    0., 0., 0.
-])
-# def ref_func(t, quad):
-#     _ref = np.zeros(12)
-#     _ref[0:2] = np.array([0.3 * np.cos(0.1*t), 0.3 * np.sin(0.1*t)])
-#     _ref[6:9] = quad._Rwb(np.zeros(3)).T @ np.array([-0.03 * np.sin(t), 0.03 * np.cos(t), 0.])
-#     return _ref
-# ref = lambda t: ref_func(t, quad)
+def ref_func(t, quad):
+    _ref = np.zeros(12)
+    _ref[0:3] = np.array([np.cos(0.2 * t), np.sin(0.2 * t), 0.])
+    _ref[6:9] = quad._Rwb(np.zeros(3)).T @ np.array([-0.2 * np.sin(t), 0.2 * np.cos(t), 0.])
+    return _ref
+ref = lambda t: ref_func(t, quad)
 
 mrc = MultirateQuadController(
     quad,
@@ -84,31 +78,34 @@ mrc = MultirateQuadController(
 )
 
 # pd controller
-sim_dt = 0.01 # dt for simulation
-kp_xyz = 0.01 # gains for Cartesian position control
-kd_xyz = 0.04
-kp_a = 10     # gains for attitude control
-kd_a = 5
-ref = lambda t: np.array([0.3 * np.cos(t), 0.3 * np.sin(t), 0, 0]) # reference
+# sim_dt = 0.01 # dt for simulation
+# kp_xyz = 0.01 # gains for Cartesian position control
+# kd_xyz = 0.04
+# kp_a = 10     # gains for attitude control
+# kd_a = 5
+# ref = lambda t: np.array([0.3 * np.cos(t), 0.3 * np.sin(t), 0, 0]) # reference
 
-pdc = PDQuadController(
-    quad,
-    sim_dt,
-    kp_xyz,
-    kd_xyz,
-    kp_a,
-    kd_a,
-    ref
-)
+# pdc = PDQuadController(
+#     quad,
+#     sim_dt,
+#     kp_xyz,
+#     kd_xyz,
+#     kp_a,
+#     kd_a,
+#     ref
+# )
 
 
 # OBSTACLES #
 obs1 = SphereObstacle(
-    np.array([0., 0., 0.3]), # position
-    0.1                      # radius
+    np.array([0., 1., 0.]),  # position
+    0.2                      # radius
 )
-obs_list = [obs1]
-obs_list = None
+obs2 = SphereObstacle(
+    np.array([-1., 0., 0.]), # position
+    0.2                      # radius
+)
+obs_list = [obs1, obs2]
 
 
 # SIMULATOR #
@@ -124,11 +121,11 @@ simulator = SimulationEnvironment(
 
 if __name__ == "__main__":
     s0 = np.zeros(12) # initial state
-    tsim = np.linspace(0, 5, 51) # query times
+    tsim = np.linspace(0, 30, 301) # query times
     sim_data = simulator.simulate(
         s0,
         tsim,
         dfunc=None,    # disturbance function
         animate=True,
-        anim_name='meh1.mp4' # 'NAME.mp4' to save the run
+        anim_name='vid' # 'NAME' to save the run
     )

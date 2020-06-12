@@ -417,12 +417,6 @@ class MultirateQuadController(Controller):
         )
         iv = sol.x[(n * (T + 1)) : (n * (T + 1)) + m]
 
-        # emergency non-negativity check
-        # wsq = self._quad._invU @ iv
-        # if not all(wsq >= 0.):
-        #     wsq[wsq < 0.] = 1e-6
-        #     iv = self._quad._U @ wsq
-
         return iv
 
     def _get_slow_cost(self, t, z, P, Q, R):
@@ -632,12 +626,6 @@ class MultirateQuadController(Controller):
 
         iu = sol.x - iv
 
-        # emergency non-negativity check
-        # wsq = self._quad._invU @ iu
-        # if not all(wsq >= 0.):
-        #     wsq[wsq < 0.] = 1e-6
-        #     iu = self._quad._U @ wsq
-
         return iu
 
     def _get_fast_quad_cons(
@@ -676,9 +664,9 @@ class MultirateQuadController(Controller):
         else:
             num_constr = 7
 
-        A = np.zeros((num_constr, 4))
-        lb = -np.inf * np.ones(num_constr)
-        ub = np.zeros(num_constr)
+        Cs = []
+        lbs = []
+        ubs = []
 
         # unpacking state
         x, y, z = s[0:3]
@@ -721,8 +709,10 @@ class MultirateQuadController(Controller):
         lgh_v = np.array([[-(2. * w) / m, 0., 0., 0.]])
 
         alpha_v = self._lv_func(h_v)
-        A[0, :] = -lgh_v
-        ub[0] = lfh_v + alpha_v
+
+        Cs.append(-lgh_v)
+        lbs.append(-np.array([np.inf]))
+        ubs.append(np.array([lfh_v + alpha_v]))
 
 
         # roll limits
@@ -754,8 +744,10 @@ class MultirateQuadController(Controller):
             self._K_vals[0, :] = K_phi
 
         K_phi = self._K_vals[0, :]
-        A[1, :] = -lglfh_phi
-        ub[1] = K_phi @ np.array([h_phi, lfh_phi]) + lf2h_phi
+
+        Cs.append(-lglfh_phi)
+        lbs.append(-np.array([np.inf]))
+        ubs.append(K_phi @ np.array([h_phi, lfh_phi]) + lf2h_phi)
 
 
         # pitch limits
@@ -782,9 +774,10 @@ class MultirateQuadController(Controller):
             self._K_vals[1, :] = K_th
 
         K_th = self._K_vals[1, :]
-        A[2, :] = -lglfh_th
-        ub[2] = K_th @ np.array([h_th, lfh_th]) + lf2h_th
 
+        Cs.append(-lglfh_th)
+        lbs.append(-np.array([np.inf]))
+        ubs.append(K_th @ np.array([h_th, lfh_th]) + lf2h_th)
 
         # obstacles
         if obs_list is None:
@@ -826,19 +819,27 @@ class MultirateQuadController(Controller):
                     self._K_vals[(k_obs + 2), :] = K_o
 
                 K_o = self._K_vals[(k_obs + 2), :]
-                A[(k_obs + 3), :] = -lglfh_o
-                ub[(k_obs + 3)] = K_o @ np.array([h_o, lfh_o]) + lf2h_o
+
+                Cs.append(-lglfh_o)
+                lbs.append(-np.array([np.inf]))
+                ubs.append(K_o @ np.array([h_o, lfh_o]) + lf2h_o)
 
             else:
                 raise NotImplementedError
 
         # non-negative rotor speed constraints
-        A[-4:, :] = self._quad._invU
-        ub[-4:] = np.inf
-        lb[-4:] = 1e-6
+        Cs.append(self._quad._invU)
+        lbs.append(1e-6 * np.ones(4))
+        ubs.append(np.inf * np.ones(4))
+
+        # consolidating constraints
+        C = np.vstack(Cs)
+        lb = np.hstack(lbs)
+        ub = np.hstack(ubs)
 
         # constraint object
-        safety_cons = LinearConstraint(A, lb, ub)
+        # safety_cons = LinearConstraint(A, lb, ub)
+        safety_cons = LinearConstraint(C, lb, ub)
         return safety_cons
 
     def reset(self) -> None:
