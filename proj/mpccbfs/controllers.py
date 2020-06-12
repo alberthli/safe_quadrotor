@@ -540,7 +540,7 @@ class MultirateQuadController(Controller):
         invU = self._quad._invU
         for i in range(T):
             C = np.zeros((m, l))
-            C[:, (m * i):(m * (i + 1))] = invU
+            C[:, (u_off + m * i):(u_off + m * (i + 1))] = invU
             lb = 1e-6 * np.ones(m)
             ub = np.inf * np.ones(m)
 
@@ -559,13 +559,25 @@ class MultirateQuadController(Controller):
             else:
                 C[:, (n * (i - 1)):(n * i)] = -(np.eye(n) + dt * A)
                 C[:, (n * i):(n * (i + 1))] = np.eye(n)
-                C[:, (u_off + (m * (i - 1))):(u_off + (m * i))] = -dt * B
+                C[:, (u_off + m * (i - 1)):(u_off + m * i)] = -dt * B
                 lb = -dt * (A @ s + B @ u_bar)
                 ub = -dt * (A @ s + B @ u_bar)
 
             Ceqs.append(C)
             lbeqs.append(lb)
             ubeqs.append(ub)
+
+        # angle constraints
+        for i in range(T + 1):
+            C = np.zeros((2, l))
+            C[0, 3 + n * i] = 1
+            C[0, 4 + n * i] = 1
+            lb = -self._safe_rot * np.ones(2)
+            ub = self._safe_rot * np.ones(2)
+
+            Cineqs.append(C)
+            lbineqs.append(lb)
+            ubineqs.append(ub)
 
         # consolidating constraints
         Cineq = np.vstack(Cineqs)
