@@ -262,6 +262,6 @@ class SimulationEnvironment:
 
                 self._clear_frame(clear_obs=True)
         except KeyboardInterrupt as e:
-            raise e
+            pass
 
         return s_sol

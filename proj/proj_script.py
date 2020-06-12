@@ -87,7 +87,7 @@ mrc = MultirateQuadController(
 
 # pd controller
 sim_dt = 0.01 # dt for simulation
-kp_xyz = 0.02 # gains for Cartesian position control
+kp_xyz = 0.01 # gains for Cartesian position control
 kd_xyz = 0.04
 kp_a = 10     # gains for attitude control
 kd_a = 5
