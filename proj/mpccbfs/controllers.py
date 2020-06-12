@@ -3,10 +3,11 @@ import scipy
 from scipy.optimize import minimize, LinearConstraint
 from scipy.signal import place_poles
 from abc import ABC, abstractmethod
-from typing import Callable, List
+from typing import Callable, List, Any, Dict
 
 from mpccbfs.quadrotor import Quadrotor
 from mpccbfs.obstacles import Obstacle, SphereObstacle
+from collections import defaultdict
 
 
 # constants
@@ -23,6 +24,8 @@ class Controller(ABC):
         self._n = n
         self._control_dim = m
         self._sim_dt = None
+
+        self.debug_dict = defaultdict(list)
 
     @abstractmethod
     def ctrl(self, t: float, s: np.ndarray) -> np.ndarray:
@@ -63,7 +66,7 @@ class PDQuadController(Controller):
         kd_xyz: float,
         kp_a: float,
         kd_a: float,
-        ref: Callable[[float], np.ndarray]
+        ref: Callable[[float], np.ndarray],
     ) -> None:
         """
         Initialization for the quadrotor PD controller.
@@ -82,6 +85,7 @@ class PDQuadController(Controller):
             Reference function. Takes in time, outputs desired (x, y, z, psi).
             Assumes the desired pitch and roll are zero.
         """
+
 
         assert kp_xyz >= 0.
         assert kd_xyz >= 0.
@@ -183,6 +187,10 @@ class PDQuadController(Controller):
         ref = self._ref(t)
         x_d, y_d, z_d, psi_d = ref
 
+        self.debug_dict["true_state"].append(s)
+        self.debug_dict["ref_state"].append(self._ref(t))
+        self.debug_dict["time"].append(t)
+
         # state extraction
         x, y, z = s[0:3]
         phi, theta, psi = s[3:6]
@@ -231,6 +239,7 @@ class PDQuadController(Controller):
         U = self._quad._U
         i = U @ wsq
 
+        self.debug_dict["input"].append(i)
         return i
 
     def reset(self) -> None:
@@ -267,6 +276,7 @@ class MultirateQuadController(Controller):
         mpc_Q: np.ndarray,
         mpc_R: np.ndarray,
         ref: Callable[[float], np.ndarray],
+        debug_dict: Dict[str, Any] = None
     ) -> None:
         """
         Initialization for the quadrotor multirate controller.
@@ -305,7 +315,6 @@ class MultirateQuadController(Controller):
             gives u, v, w. Then, the angles/angular velocity references can be
             set identically to 0.
         """
-
         super(MultirateQuadController, self).__init__(12, 4)
 
         assert slow_rate > 0.
@@ -877,6 +886,11 @@ class MultirateQuadController(Controller):
             Control input.
         """
 
+        self.debug_dict["true_state"].append(s)
+        self.debug_dict["ref_state"].append(self._ref(t))
+        self.debug_dict["time"].append(t)
+
+
         assert s.shape == (self._n,)
 
         # initializing memory
@@ -889,6 +903,9 @@ class MultirateQuadController(Controller):
 
             assert self._iv.shape == (self._control_dim,)
             assert self._iu.shape == (self._control_dim,)
+            self.debug_dict["input_slow"].append(self._iv)
+            self.debug_dict["input_fast"].append(self._iu)
+            self.debug_dict["input"].append(self._iv + self._iu)
 
             return self._iv + self._iu
 
@@ -913,4 +930,7 @@ class MultirateQuadController(Controller):
             wsq[wsq < 0.] = 1e-6
             i = self._quad._U @ wsq
 
+        self.debug_dict["input_slow"].append(self._iv)
+        self.debug_dict["input_fast"].append(self._iu)
+        self.debug_dict["input"].append(i)
         return i
