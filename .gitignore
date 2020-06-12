@@ -1,2 +1,3 @@
 proj/sims
 *.mp4
+__pycache__

@@ -243,22 +243,25 @@ class SimulationEnvironment:
         self._ctrler.reset()
 
         # animation
-        if animate:
-            self._draw_obs()
+        try:
+            if animate:
+                self._draw_obs()
 
-            def _anim_quad(i):
-                self._clear_frame()
-                self._draw_quad(s_sol[:, i])
+                def _anim_quad(i):
+                    self._clear_frame()
+                    self._draw_quad(s_sol[:, i])
 
-            anim = animation.FuncAnimation(
-                self._fig, _anim_quad, interval=(50 / 3.), frames=len(tsim))
-            plt.show()
+                anim = animation.FuncAnimation(
+                    self._fig, _anim_quad, interval=(50 / 3.), frames=len(tsim))
+                plt.show()
 
-            if anim_name is not None:
-                Writer = animation.writers['ffmpeg']
-                writer = Writer(fps=60, bitrate=1800)
-                anim.save('{}.mp4'.format(anim_name), writer=writer)
+                if anim_name is not None:
+                    Writer = animation.writers['ffmpeg']
+                    writer = Writer(fps=60, bitrate=1800)
+                    anim.save('{}.mp4'.format(anim_name), writer=writer)
 
-            self._clear_frame(clear_obs=True)
+                self._clear_frame(clear_obs=True)
+        except KeyboardInterrupt as e:
+            raise e
 
         return s_sol

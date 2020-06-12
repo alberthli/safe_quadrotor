@@ -4,6 +4,8 @@ from mpccbfs.quadrotor import Quadrotor
 from mpccbfs.simulator import SimulationEnvironment
 from mpccbfs.controllers import MultirateQuadController, PDQuadController
 from mpccbfs.obstacles import Obstacle, SphereObstacle
+import matplotlib.pyplot as plt
+
 
 """
 CURRENT USAGE
@@ -66,6 +68,12 @@ ref = lambda t: np.array([
 #     return _ref
 # ref = lambda t: ref_func(t, quad)
 
+"""Dictionary for debugging"""
+debug_dict = {
+    "true_state":  [],
+    "ref_state":  []
+}
+
 mrc = MultirateQuadController(
     quad,
     slow_rate,
@@ -80,16 +88,16 @@ mrc = MultirateQuadController(
     mpc_P,
     mpc_Q,
     mpc_R,
-    ref
+    ref,
 )
 
 # pd controller
 sim_dt = 0.01 # dt for simulation
-kp_xyz = 0.01 # gains for Cartesian position control
+kp_xyz = 0.02 # gains for Cartesian position control
 kd_xyz = 0.04
 kp_a = 10     # gains for attitude control
 kd_a = 5
-ref = lambda t: np.array([0.3 * np.cos(t), 0.3 * np.sin(t), 0, 0]) # reference
+ref = lambda t: np.array([0.3 * np.cos(t/10), 0.3 * np.sin(t/10), 0, 0]) # reference
 
 pdc = PDQuadController(
     quad,
@@ -98,7 +106,7 @@ pdc = PDQuadController(
     kd_xyz,
     kp_a,
     kd_a,
-    ref
+    ref,
 )
 
 
@@ -112,14 +120,16 @@ obs_list = None
 
 
 # SIMULATOR #
+controller = mrc
 simulator = SimulationEnvironment(
     quad,     # quadcopter
-    mrc,      # controller
+    controller,      # controller
     obs_list, # obstacle list
     (-2, 2),  # xyz limits
     (-2, 2),
     (-2, 2)
 )
+
 
 
 if __name__ == "__main__":
@@ -132,3 +142,29 @@ if __name__ == "__main__":
         animate=True,
         anim_name='meh1.mp4' # 'NAME.mp4' to save the run
     )
+
+    states = np.array(controller.debug_dict["true_state"])
+    refs = np.array(controller.debug_dict["ref_state"])
+    times = np.array(controller.debug_dict["time"])
+    fig, axs = plt.subplots(states.shape[1])
+    for i, (state, ref) in enumerate(zip(states.T, refs.T)):
+        axs[i].plot(times, state)
+        axs[i].plot(times, ref)
+    plt.title("states")
+    plt.show()
+
+    inputs = np.array(controller.debug_dict["input"])
+    fig, axs = plt.subplots(inputs.shape[1])
+    for i, u_i in enumerate(inputs.T):
+        axs[i].plot(times, u_i)
+    axs[0].title("inputs")
+    plt.show()
+    if isinstance(controller, MultirateQuadController):
+        inputs_slow = np.array(controller.debug_dict["input_slow"])
+        inputs_fast = np.array(controller.debug_dict["input_fast"])
+        fig, axs = plt.subplots(inputs_slow.shape[1])
+        for i, (u_i_slow, u_i_fast) in enumerate(zip(inputs_slow.T, inputs_fast.T)):
+            axs[i].plot(times, u_i_slow)
+            axs[i].plot(times, u_i_fast)
+        axs[0].title("slow and fast input")
+        plt.show()
