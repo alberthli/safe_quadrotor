@@ -53,9 +53,9 @@ class SimulationEnvironment:
         self._ax = p3.Axes3D(self._fig)
         self._ax.set_proj_type('ortho')
         self._ax.grid(False)
-        # self._ax.set_xticks([])
-        # self._ax.set_yticks([])
-        # self._ax.set_zticks([])
+        self._ax.set_xticks([])
+        self._ax.set_yticks([])
+        self._ax.set_zticks([])
         self._ax.set_xlim3d(xlim)
         self._ax.set_ylim3d(ylim)
         self._ax.set_zlim3d(zlim)
@@ -232,7 +232,8 @@ class SimulationEnvironment:
         tsim: np.ndarray,
         dfunc: Callable[[float, np.ndarray], np.ndarray] = None,
         animate: bool = False,
-        anim_name: str = None
+        anim_name: str = None,
+        fps: float = 10.,
     ) -> np.ndarray:
         """
         Simulates a quadrotor run.
@@ -305,7 +306,7 @@ class SimulationEnvironment:
 
             if anim_name is not None:
                 Writer = animation.writers['ffmpeg']
-                writer = Writer(fps=10, bitrate=1800)
+                writer = Writer(fps=fps, bitrate=1800)
                 anim.save('{}.mp4'.format(anim_name), writer=writer)
 
             plt.show()
