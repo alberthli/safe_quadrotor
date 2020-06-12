@@ -68,12 +68,6 @@ ref = lambda t: np.array([
 #     return _ref
 # ref = lambda t: ref_func(t, quad)
 
-"""Dictionary for debugging"""
-debug_dict = {
-    "true_state":  [],
-    "ref_state":  []
-}
-
 mrc = MultirateQuadController(
     quad,
     slow_rate,
@@ -150,14 +144,14 @@ if __name__ == "__main__":
     for i, (state, ref) in enumerate(zip(states.T, refs.T)):
         axs[i].plot(times, state)
         axs[i].plot(times, ref)
-    plt.title("states")
+    axs[0].set_title("states")
     plt.show()
 
     inputs = np.array(controller.debug_dict["input"])
     fig, axs = plt.subplots(inputs.shape[1])
     for i, u_i in enumerate(inputs.T):
         axs[i].plot(times, u_i)
-    axs[0].title("inputs")
+    axs[0].set_title("inputs")
     plt.show()
     if isinstance(controller, MultirateQuadController):
         inputs_slow = np.array(controller.debug_dict["input_slow"])
@@ -166,5 +160,5 @@ if __name__ == "__main__":
         for i, (u_i_slow, u_i_fast) in enumerate(zip(inputs_slow.T, inputs_fast.T)):
             axs[i].plot(times, u_i_slow)
             axs[i].plot(times, u_i_fast)
-        axs[0].title("slow and fast input")
+        axs[0].set_title("slow and fast input")
         plt.show()
