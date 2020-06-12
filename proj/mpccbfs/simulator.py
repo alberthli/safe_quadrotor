@@ -300,12 +300,12 @@ class SimulationEnvironment:
                 self._draw_traj(s_sol, ref_traj, i)
 
             anim = animation.FuncAnimation(
-                self._fig, _anim_quad, interval=(50 / 3.), frames=len(tsim)
+                self._fig, _anim_quad, interval=20., frames=len(tsim)
             )
 
             if anim_name is not None:
                 Writer = animation.writers['ffmpeg']
-                writer = Writer(fps=60, bitrate=1800)
+                writer = Writer(fps=10, bitrate=1800)
                 anim.save('{}.mp4'.format(anim_name), writer=writer)
 
             plt.show()

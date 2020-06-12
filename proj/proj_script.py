@@ -5,25 +5,6 @@ from mpccbfs.simulator import SimulationEnvironment
 from mpccbfs.controllers import MultirateQuadController, PDQuadController
 from mpccbfs.obstacles import Obstacle, SphereObstacle
 
-"""
-CURRENT USAGE
--------------
-[1] To see obstacle CBF, just run with an obstacle list
-[2] To see speed constraint, just make obstacle list None
-
-The only reason [2] works is because right now the slow controller is hard-coded
-to just always input a vertical thrust no matter what. There's no additional
-complex controller being composed with the low-level safe controller.
-
-
-TODO
-----
-- Finish designing the slow update in the multirate controller
-- Test disturbances
-- Make a safe PD controller as a comparative baseline for the safe MPC
-
-- Maybe: look for niche 3d aspect ratio workaround so spheres look proper
-"""
 
 # QUADROTOR #
 m = 1.                     # mass
@@ -31,7 +12,7 @@ I = np.array([1., 1., 1.]) # principal moments of inertia
 kf = 1.                    # thrust factor
 km = 1.                    # drag factor
 l = 0.1                    # rotor arm length
-Jtp = None                  # Optional: total rot moment about prop axes (gyro)
+Jtp = 0.1                  # Optional: total rot moment about prop axes (gyro)
 
 quad = Quadrotor(m, I, kf, km, l, Jtp)
 
@@ -39,24 +20,24 @@ quad = Quadrotor(m, I, kf, km, l, Jtp)
 # CONTROLLERS #
 
 # multirate controller
-slow_rate = 10.       # slow controller rate
-fast_rate = 100.      # fast controller rate
-lv_func = lambda x: x # class-K function for relative degree 1 constraints
-c1 = 20.               # limits for ECBF pole placement
+slow_rate = 10.          # slow controller rate
+fast_rate = 100.         # fast controller rate
+lv_func = lambda x: x    # class-K function for relative degree 1 constraints
+c1 = 20.                 # limits for ECBF pole placement
 c2 = 50.
-safe_dist = 0.05      # safe distance from obstacles
-safe_rot = 0.025      # safe rotation angle (rad)
-safe_vel = 5.        # safe linear velocity
-mpc_T = 4             # MPC planning steps
-mpc_P = np.eye(12)          # terminal cost - None means DARE solution
+safe_dist = 0.05         # safe distance from obstacles
+safe_rot = 0.025         # safe rotation angle (rad)
+safe_vel = 5.            # safe linear velocity
+mpc_T = 4                # MPC planning steps
+mpc_P = np.eye(12)       # terminal cost - None means DARE solution
 mpc_P[0:6, 0:6] *= 25
-mpc_Q = np.eye(12)    # state cost
+mpc_Q = np.eye(12)       # state cost
 mpc_Q[0:6, 0:6] *= 25
-mpc_R = 0.01 * np.eye(4)     # control cost
-def ref_func(t, quad):
+mpc_R = 0.01 * np.eye(4) # control cost
+def ref_func(t, quad):   # reference function
     _ref = np.zeros(12)
     _ref[0:3] = np.array([np.cos(0.2 * t), np.sin(0.2 * t), 0.])
-    _ref[6:9] = quad._Rwb(np.zeros(3)).T @ np.array([-0.2 * np.sin(t), 0.2 * np.cos(t), 0.])
+    _ref[6:9] = quad._Rwb(np.zeros(3)).T @ np.array([-0.2 * np.sin(0.2 * t), 0.2 * np.cos(0.2 * t), 0.])
     return _ref
 ref = lambda t: ref_func(t, quad)
 
