@@ -41,12 +41,32 @@ quad = Quadrotor(m, I, kf, km, l, Jtp)
 # multirate controller - TODO: write the slow update
 slow_rate = 10.       # slow controller rate
 fast_rate = 100.      # fast controller rate
-lv_func = lambda x: x # class-K function for relative degree 1 constraints
-c1 = 1.               # limits for ECBF pole placement
-c2 = 2.
+lv_func = lambda x: 0.0001 * x # class-K function for relative degree 1 constraints
+c1 = 0.05               # limits for ECBF pole placement
+c2 = 0.1
 safe_dist = 0.05      # safe distance from obstacles
-safe_rot = 0.025      # safe rotation angle (rad)
-safe_vel = 0.1        # safe linear velocity
+safe_rot = 0.1      # safe rotation angle (rad)
+safe_vel = 1        # safe linear velocity
+mpc_T = 5             # MPC planning steps
+mpc_P = np.eye(12)          # terminal cost - None means DARE solution
+# mpc_P[0:3, 0:3] *= 1000
+# mpc_P[5, 5] *= 100
+mpc_Q = np.eye(12)    # state cost
+# mpc_Q[0:3, 0:3] *= 1000
+# mpc_Q[5, 5] *= 100
+mpc_R = 0.01 *np.eye(4)     # control cost
+# ref = lambda t: np.array([
+#     0.2 * t, 0., 0.,
+#     0., 0., 0.,
+#     0.2, 0., 0.,
+#     0., 0., 0.
+# ])
+def ref_func(t, quad):
+    _ref = np.zeros(12)
+    _ref[0:2] = np.array([0.3 * np.cos(t), 0.3 * np.sin(t)])
+    # _ref[6:9] = quad._Rwb(np.zeros(3)).T @ np.array([-0.3 * np.sin(t), 0.3 * np.cos(t), 0.])
+    return _ref
+ref = lambda t: ref_func(t, quad)
 
 mrc = MultirateQuadController(
     quad,
@@ -57,7 +77,12 @@ mrc = MultirateQuadController(
     c2,
     safe_dist,  
     safe_rot, 
-    safe_vel    
+    safe_vel,
+    mpc_T,
+    mpc_P,
+    mpc_Q,
+    mpc_R,
+    ref
 )
 
 # pd controller
@@ -85,6 +110,7 @@ obs1 = SphereObstacle(
     0.1                      # radius
 )
 obs_list = [obs1]
+obs_list = None
 
 
 # SIMULATOR #
@@ -92,15 +118,14 @@ simulator = SimulationEnvironment(
     quad,     # quadcopter
     mrc,      # controller
     obs_list, # obstacle list
-    (-1, 1),  # xyz limits
-    (-1, 1),
-    (-1, 1)
+    (-2, 2),  # xyz limits
+    (-2, 2),
+    (-2, 2)
 )
 
 
 if __name__ == "__main__":
     s0 = np.zeros(12) # initial state
-    s0[5] = 1 # initial yaw
     tsim = np.linspace(0, 10, 101) # query times
     sim_data = simulator.simulate(
         s0,

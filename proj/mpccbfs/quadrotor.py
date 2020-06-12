@@ -290,7 +290,7 @@ class Quadrotor:
 
         return B
 
-    def _D(self) -> np.ndarray:
+    def _D(self, s) -> np.ndarray:
         """
         Linearized disturbance dynamics in BODY frame.
 
@@ -301,7 +301,7 @@ class Quadrotor:
 
         Returns
         -------
-        B: np.ndarray, shape=(12, 12)
+        D: np.ndarray, shape=(12, 6)
             Linearized disturbance dynamics about s.
         """
 
@@ -475,6 +475,7 @@ class Quadrotor:
             q = s[10]
 
             wsq = self._invU @ i
+            assert all(wsq >= 0.)
             w = np.sqrt(wsq)
             w[0] *= -1
             w[2] *= -1
