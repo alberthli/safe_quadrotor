@@ -41,8 +41,20 @@ kd_xyz = 0.04
 kp_a = 10     # gains for attitude control
 kd_a = 5
 # ref = lambda t: np.array([0.3 * np.cos(0.2*t), 0.3 * np.sin(0.2*t), 0.05*t, 0]) # reference
-ref = lambda t: np.array([1, 0, 0, 0]) # reference
-# ref = lambda t: np.array([1, 0, 1, 0]) # reference
+# ref = lambda t: np.array([1, 0, 0, 0])
+# ref = lambda t: np.array([0.5, 0, 0.2*t, 0, 0, 0.2, 0, 0, 0])
+# ref = lambda t: np.array([0, 0, 1, 0])
+# ref = lambda t: np.array([0.2*t, 0, 0, 0])
+# ref = lambda t: np.array([1, 0, 1, 0]) 
+# ref = lambda t: np.array([0, 0, 0.2*t, 0])
+
+ref = lambda t: np.array([1.0, 0.0, 0.0, 
+                          0.0, 0.0, 0.0,
+                          0.0, 0.0, 0.0])
+
+# ref = lambda t: np.array([0.3*np.cos(0.4*t), 0.3*np.sin(0.4*t), 0.05*t, 
+#                           -0.12*np.sin(0.4*t), 0.12*np.cos(0.4*t), 0.05,
+#                           -0.048*np.cos(0.4*t), -0.048*np.sin(0.4*t), 0.0])
 
 pdc = PDQuadController(
     quad,
@@ -110,9 +122,9 @@ obs3 = SphereObstacle(
     0.1                      # radius
 )
 bigObs = SphereObstacle(np.array([0.5, 0., 0.]), 0.2)
-# obs_list = [bigObs]
+obs_list = [bigObs]
 # obs_list = [obs1, obs2, obs3]
-obs_list = []
+# obs_list = []
 
 
 # SIMULATOR #
@@ -127,12 +139,12 @@ simulator = SimulationEnvironment(
 
 if __name__ == "__main__":
     s0 = np.zeros(12) # initial state
-    s0[5] = 0 #1 # initial yaw
-    tsim = np.linspace(0, 5, 101) # query times
+    # s0[5] = 1 # initial yaw
+    tsim = np.linspace(0, 15, 101) # query times
     sim_data = simulator.simulate(
         s0,
         tsim,
         dfunc=None,    # disturbance function
         animate=True,
-        anim_name="mpc_testing.mp4" # 'NAME.mp4' to save the run
+        anim_name="diff_flatness_testing.mp4" # 'NAME.mp4' to save the run
     )

@@ -586,6 +586,213 @@ class MultirateQuadController(Controller):
 
         return iv
 
+    def _mpc_ctrl(
+        self, t: float, s: np.ndarray, obs_list: List[Obstacle]
+    ) -> np.ndarray:
+        """
+        Slow control law. Updates _s_bar internally using MPC. Trajectory
+        generation strategy taken from
+
+        'Minimum Snap Trajectory Generation and Control for Quadrotors'.
+
+        Uses differential flatness of the COM position and yaw to yield fast
+        trajectory planning for high-level control.
+
+        Parameters
+        ----------
+        t: float
+            Time.
+        s: np.ndarray, shape=(n,)
+            State.
+        obs_list: List[Obstacle]
+            List of obstacles.
+
+        Returns
+        -------
+        i: np.ndarray, shape=(m,)
+            Control input.
+        """
+
+        assert s.shape == (self._n,)
+
+        iv = np.zeros(self._control_dim)
+
+        def grav_dynamics(s):
+            v = np.zeros(12)
+            v[6:9] = (self._quad._Rwb(s[3:6]).T @ np.array([[0, 0, -g]]).T).squeeze()
+            # v[6:9] = (np.array([[0, 0, -g]]).T).squeeze()
+            return v
+
+        # MPC time variables
+        T = 30+1
+        tspan = np.linspace(t, t + (T-1)*self._slow_dt, T)
+
+        # Reference trajectory
+        ref_traj = np.zeros((T, 4))
+        ref = self._ref
+        for i in range(T):
+            ref_traj[i,:] = ref(tspan[i]).reshape((1,4))
+        # ref_traj = np.zeros((T, 6))
+        # ref = self._ref
+        # for i in range(T):
+        #     ref_traj[i,:] = ref(tspan[i]).reshape((1,6))
+        
+        # CVX variables
+        states = cp.Variable((T, self._n))
+        controls = cp.Variable((T - 1, self._control_dim))
+
+        # Cost function
+        cost = cp.sum_squares(states[-1, :3] - ref_traj[-1, :3])
+        # cost += 0.5*cp.sum_squares(states[-1, 6:9] - ref_traj[-1, 3:])
+        for i in range(T-1):
+            cost += 0.1*cp.sum_squares(states[i, :3] - ref_traj[i, :3])
+            # cost += 0.05*cp.sum_squares(states[-1, 6:9] - ref_traj[-1, 3:])
+
+        # Objective
+        objective = cp.Minimize(cost)
+
+        # Constraints
+        constraints = []
+
+        # > Positive rotor speeds
+        for time in range(T-1):
+            constraints.append(
+                self._quad._invU @ controls[time, :, None] - 0.00001 >= 0
+            )
+
+        # > Initial condition
+        constraints.append(states[0] == s)
+
+        # > Dynamics
+        # states_bar = np.zeros((T, self._n))
+        # for i in range(T):
+        #     states_bar[i,:3] = ref_traj[i,:3]
+        #     states_bar[i,3:] = s[3:]
+        # for time in range(T-1):
+        #     A = self._quad._A(states_bar[time])
+        #     B = self._quad._B(states_bar[time])
+        #     constraints.append(
+        #         states[time+1, :, None] == states[time, :, None] + self._slow_dt*( A @ states[time, :, None] + B @ controls[time, :, None] + grav_dynamics(states_bar[time])[:, None])
+        #     )
+        A = self._quad._A(s)
+        B = self._quad._B(s)
+        for time in range(T-1):
+            constraints.append(
+                # states[time+1, :, None] == states[time, :, None] + self._slow_dt*( A @ states[time, :, None] + B @ controls[time, :, None] + grav_dynamics(s)[:, None])
+                states[time+1, :, None] == states[time, :, None] + self._slow_dt*( A @ (states[time, :, None]-s.reshape((12,1))) + B @ controls[time, :, None] + grav_dynamics(s)[:, None])
+            )
+            
+        problem = cp.Problem(objective, constraints)
+        problem.solve()
+        assert objective.value is not None
+        iv = controls.value[0]
+
+        print("mpc: {}".format(t))
+        print("\tiv:", iv)
+        print("\tposition:", s[:3])
+
+        return iv
+
+    def _diff_flat_ctrl(
+        self, t: float, s: np.ndarray, obs_list: List[Obstacle]
+    ) -> np.ndarray:
+        """
+        Differentially flat controller
+
+        'Minimum Snap Trajectory Generation and Control for Quadrotors'.
+
+        Uses differential flatness of the COM position and yaw to yield fast
+        trajectory planning for high-level control.
+
+        Parameters
+        ----------
+        t: float
+            Time.
+        s: np.ndarray, shape=(n,)
+            State.
+        obs_list: List[Obstacle]
+            List of obstacles.
+
+        Returns
+        -------
+        i: np.ndarray, shape=(m,)
+            Control input.
+        """
+
+        assert s.shape == (self._n,)
+
+        iv = np.zeros(self._control_dim)
+
+        # reference trajectory 
+        ref_traj = self._ref(t)
+        rT = ref_traj[0:3]
+        rT_dot = ref_traj[3:6]
+        rT_ddot = ref_traj[6:]
+
+        # body -> world transformations
+        alpha = s[3:6]
+        Rwb = self._quad._Rwb(alpha)
+        Twb = self._quad._Twb(alpha)
+
+        r = s[0:3]
+        r_dot = Rwb @ s[6:9]
+        
+        ep = r - rT
+        ev = r_dot - rT_dot
+
+        Kp = 0.2*np.array([[1, 0, 0], 
+                       [0, 1, 0], 
+                       [0, 0, 1]])
+
+        Kv = 0.6*np.array([[1, 0, 0], 
+                       [0, 1, 0], 
+                       [0, 0, 1]])
+
+        Fdes = -(Kp @ ep) -(Kv @ ev) + self._quad._m*g*np.array([0, 0, 1]) + self._quad._m*rT_ddot
+
+        zB1 = Rwb.T @ np.array([0, 0, 1])
+        t_vec = rT_ddot + np.array([0, 0, g])
+        zB2 = t_vec/np.linalg.norm(t_vec)
+        print(t)
+        print(zB1)
+        print(zB2)
+        u1 = Fdes @ zB1
+        print(u1)
+
+        iv[0] = u1
+
+        zBdes = Fdes/np.linalg.norm(Fdes)
+
+        psiT = 0
+        xCdes = np.array([np.cos(psiT), np.sin(psiT), 0])
+        yBdes = np.cross(zBdes, xCdes)/np.linalg.norm(np.cross(zBdes, xCdes))
+        xBdes = np.cross(yBdes, zBdes)
+
+        Rdes = np.hstack((xBdes.reshape(3,1), yBdes.reshape(3,1), zBdes.reshape(3,1)))
+
+        def vee(W):
+            w = np.array([-W[1,2], W[0,2], -W[0,1]])
+            return w
+
+        eR = vee(0.5*((Rdes.T @ Rwb) - (Rwb.T @ Rdes)))
+
+        eOmega = s[9:12]
+
+        Kr = 10.0*np.array([[1, 0, 0], 
+                       [0, 1, 0], 
+                       [0, 0, 1]])
+
+        Komega = 10.0*np.array([[1, 0, 0], 
+                       [0, 1, 0], 
+                       [0, 0, 1]])
+
+        Mdes = -(Kr @ eR) -(Komega @ eOmega)
+        print(Kr @ eR)
+        print(Komega @ eOmega)
+        iv[1:] = Mdes
+
+        return iv
+
     def _fast_ctrl(
         self, t: float, s: np.ndarray, obs_list: List[Obstacle]
     ) -> np.ndarray:
@@ -607,7 +814,7 @@ class MultirateQuadController(Controller):
             Control input.
         """
         assert s.shape == (self._n,)
-        return np.zeros_like(self._iv)
+        # return np.zeros_like(self._iv)
 
         iv = self._iv
         safety_cons = self._get_quad_cons(self._quad, s, obs_list)
@@ -866,7 +1073,9 @@ class MultirateQuadController(Controller):
             self._slow_T_mem = t
             self._fast_T_mem = t
 
-            self._iv = self._slow_ctrl(t, s, obs_list)
+            # self._iv = self._slow_ctrl(t, s, obs_list)
+            # self._iv = self._mpc_ctrl(t, s, obs_list)
+            self._iv = self._diff_flat_ctrl(t, s, obs_list)
             self._iu = self._fast_ctrl(t, s, obs_list)
 
             assert self._iv.shape == (self._control_dim,)
@@ -877,7 +1086,9 @@ class MultirateQuadController(Controller):
         # slow control update
         if (t - self._slow_T_mem) > self._slow_dt:
             self._slow_T_mem = self._slow_T_mem + self._slow_dt
-            self._iv = self._slow_ctrl(t, s, obs_list)
+            # self._iv = self._slow_ctrl(t, s, obs_list)
+            # self._iv = self._mpc_ctrl(t, s, obs_list)
+            self._iv = self._diff_flat_ctrl(t, s, obs_list)
             assert self._iv.shape == (self._control_dim,)
 
         # fast control update

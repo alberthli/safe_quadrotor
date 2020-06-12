@@ -271,9 +271,9 @@ class SimulationEnvironment:
         # Get ref traj for plotting
         ctrler = self._ctrler
         ref = ctrler._ref
-        ref_traj = np.zeros((4, s_sol.shape[1]))
+        ref_traj = np.zeros((3, s_sol.shape[1]))
         for i in range(s_sol.shape[1]):
-            ref_traj[:,i] = ref(tsim[i])
+            ref_traj[:,i] = ref(tsim[i])[:3]
 
         self._ctrler.reset()
 
