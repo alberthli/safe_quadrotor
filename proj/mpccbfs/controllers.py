@@ -571,7 +571,7 @@ class MultirateQuadController(Controller):
         for i in range(T + 1):
             C = np.zeros((2, l))
             C[0, 3 + n * i] = 1
-            C[0, 4 + n * i] = 1
+            C[1, 4 + n * i] = 1
             lb = -self._safe_rot * np.ones(2)
             ub = self._safe_rot * np.ones(2)
 
