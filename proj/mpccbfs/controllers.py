@@ -1,6 +1,6 @@
 import numpy as np
 import scipy
-from scipy.optimize import minimize, LinearConstraint
+from scipy.optimize import minimize, LinearConstraint, NonlinearConstraint
 from scipy.signal import place_poles
 from abc import ABC, abstractmethod
 from typing import Callable, List, Any, Dict
@@ -422,8 +422,12 @@ class MultirateQuadController(Controller):
             obj,
             np.zeros((n * (T + 1) + m * T)),
             constraints=safety_cons,
-            method='SLSQP'
+            method='SLSQP',
+            options={'verbose': 1}
         )
+        if not sol.success:
+            import ipdb; ipdb.set_trace();
+
         iv = sol.x[(n * (T + 1)) : (n * (T + 1)) + m]
 
         # emergency non-negativity check
@@ -481,15 +485,15 @@ class MultirateQuadController(Controller):
         cost += (xf - rf) @ P @ (xf - rf)
 
         # input costs - minimization deviation from previous control
-        u_prev = self._iv
-        if u_prev is None:
-            u_prev = np.zeros(m)
-            u_prev[0] = self._quad._m * g
-
-        for i in range(T):
-            u = us[(m * i) : (m * (i + 1))]
-            cost += (u - u_prev) @ R @ (u - u_prev)
-            u_prev = u
+        # u_prev = self._iv
+        # if u_prev is None:
+        #     u_prev = np.zeros(m)
+        #     u_prev[0] = self._quad._m * g
+        #
+        # for i in range(T):
+        #     u = us[(m * i) : (m * (i + 1))]
+        #     cost += (u - u_prev) @ R @ (u - u_prev)
+        #     u_prev = u
 
         return cost
 
@@ -566,6 +570,7 @@ class MultirateQuadController(Controller):
                 lb = s
                 ub = s
             else:
+                continue
                 C[:, (n * (i - 1)):(n * i)] = -(np.eye(n) + dt * A)
                 C[:, (n * i):(n * (i + 1))] = np.eye(n)
                 C[:, (u_off + m * (i - 1)):(u_off + m * i)] = -dt * B
@@ -575,6 +580,22 @@ class MultirateQuadController(Controller):
             Ceqs.append(C)
             lbeqs.append(lb)
             ubeqs.append(ub)
+
+        def nl_function(z):
+            xs = z[: (n * (T + 1))] # (x_0, x_1, ..., x_T)
+            us = z[(n * (T + 1)) :] # (u_0, ..., u_{T-1})
+
+
+            constraint_trajectory = [xs[0:n]]
+            for i in range(1, T+1):
+                x = constraint_trajectory[i-1]
+                u = us[(m * (i-1)) : (m * i)]
+                x_i = x + self._quad._dyn(x, u) * dt
+                constraint_trajectory.append(x_i)
+
+            return np.hstack(constraint_trajectory) - xs
+        ones = np.ones_like(n * (T+1))
+        nl_const = NonlinearConstraint(nl_function, ones * -1e-8, ones * 1e-8)
 
         # angle constraints
         for i in range(T + 1):
@@ -600,7 +621,8 @@ class MultirateQuadController(Controller):
         # constraint object
         safety_cons_eq = LinearConstraint(Ceq, lbeq, ubeq)
         safety_cons_ineq = LinearConstraint(Cineq, lbineq, ubineq)
-        safety_cons = [safety_cons_eq, safety_cons_ineq]
+        safety_cons = [safety_cons_eq, safety_cons_ineq, nl_const]
+        # safety_cons = [safety_cons_eq, safety_cons_ineq]
         return safety_cons
 
     def _fast_ctrl(
