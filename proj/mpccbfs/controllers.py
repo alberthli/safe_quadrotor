@@ -610,7 +610,7 @@ class MultirateQuadController(Controller):
 
         iv = self._iv
         safety_cons = self._get_fast_quad_cons(self._quad, s, obs_list)
-        obj = lambda iu: np.linalg.norm(iu - iv) ** 2 # objective
+        obj = lambda _u: np.linalg.norm(_u - iv) ** 2 # objective
         sol = minimize(
             obj,
             np.zeros(4), 
