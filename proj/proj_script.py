@@ -48,8 +48,12 @@ kd_a = 5
 # ref = lambda t: np.array([1, 0, 1, 0]) 
 # ref = lambda t: np.array([0, 0, 0.2*t, 0])
 
-ref = lambda t: np.array([1.0, 0.0, 0.0, 
-                          0.0, 0.0, 0.0,
+# ref = lambda t: np.array([1.0, 1.0, 1.0, 
+#                           0.0, 0.0, 0.0,
+#                           0.0, 0.0, 0.0])
+
+ref = lambda t: np.array([0.4*t, 0.4*t, 0.4*t, 
+                          0.4, 0.4, 0.4,
                           0.0, 0.0, 0.0])
 
 # ref = lambda t: np.array([0.3*np.cos(0.4*t), 0.3*np.sin(0.4*t), 0.05*t, 
@@ -67,7 +71,7 @@ pdc = PDQuadController(
 )
 
 # Multirate PD #
-slow_rate = 10.       # slow controller rate
+slow_rate = 100.       # slow controller rate
 fast_rate = 100.      # fast controller rate
 lv_func = lambda x: x # class-K function for relative degree 1 constraints
 c1 = 1.               # limits for ECBF pole placement
@@ -121,8 +125,8 @@ obs3 = SphereObstacle(
     np.array([0.7, 0.0, -0.3]), # position
     0.1                      # radius
 )
-bigObs = SphereObstacle(np.array([0.5, 0., 0.]), 0.2)
-obs_list = [bigObs]
+bigObs = SphereObstacle(np.array([0.5, 0.5, 0.5]), 0.2)
+# obs_list = [bigObs]
 # obs_list = [obs1, obs2, obs3]
 # obs_list = []
 
@@ -132,9 +136,9 @@ simulator = SimulationEnvironment(
     quad,     # quadcopter
     mrmpc,    # mcontroller
     obs_list, # obstacle list
-    (-1, 1),  # xyz limits
-    (-1, 1),
-    (-1, 1)
+    (-5, 5),  # xyz limits
+    (-5, 5),
+    (-5, 5)
 )
 
 if __name__ == "__main__":
