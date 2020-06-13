@@ -6,6 +6,10 @@ from mpccbfs.simulator import SimulationEnvironment
 from mpccbfs.controllers import MultirateQuadController, PDQuadController
 from mpccbfs.obstacles import Obstacle, SphereObstacle
 
+"""
+Example of when the multi-rate controller works but MPC alone fails:
+MPC running at 8Hz, CBF running at 100Hz, following circle trajectory.
+"""
 
 # QUADROTOR #
 m = 1.                     # mass
@@ -21,26 +25,26 @@ quad = Quadrotor(m, I, kf, km, l, Jtp)
 # CONTROLLERS #
 
 # multirate controller
-slow_rate = 10.          # slow controller rate
+slow_rate = 8.           # slow controller rate
 fast_rate = 100.         # fast controller rate
 lv_func = lambda x: x    # class-K function for relative degree 1 constraints
-c1 = 10.                 # limits for ECBF pole placement
-c2 = 20.
+c1 = 5.                  # limits for ECBF pole placement
+c2 = 10.
 safe_dist = 0.05         # safe distance from obstacles
 safe_rot = 0.02          # safe rotation angle (rad)
 safe_vel = 5.            # safe linear velocity
 mpc_T = 4                # MPC planning steps
 mpc_P = np.eye(12)       # terminal cost - None means DARE solution
-mpc_P[0:3, 0:3] *= 25
-mpc_P[3:6, 3:6] *= 10
+mpc_P[0:6, 0:6] *= 15
 mpc_Q = np.eye(12)       # state cost
-mpc_Q[0:3, 0:3] *= 25
-mpc_Q[3:6, 3:6] *= 10
+mpc_Q[0:6, 0:6] *= 15
 mpc_R = 0.01 * np.eye(4) # control cost
 def ref_func(t, quad):   # reference function
     _ref = np.zeros(12)
     _ref[0:3] = np.array([np.cos(0.2 * t), np.sin(0.2 * t), 0.])
-    _ref[6:9] = quad._Rwb(np.zeros(3)).T @ np.array([-0.2 * np.sin(0.2 * t), 0.2 * np.cos(0.2 * t), 0.])
+    _ref[6:9] = quad._Rwb(np.zeros(3)).T @ np.array(
+        [-0.2 * np.sin(0.2 * t), 0.2 * np.cos(0.2 * t), 0.]
+    )
     return _ref
 ref = lambda t: ref_func(t, quad)
 
@@ -106,17 +110,17 @@ simulator = SimulationEnvironment(
 if __name__ == "__main__":
     # running simulation
     s0 = np.zeros(12)                         # initial state
-    sim_length = 60.                          # simulation time
+    sim_length = 30.                          # simulation time
     frames = int(10 * sim_length + 1)         # number of frames
-    fps = 20                                  # animation fps
+    fps = 20.                                 # animation fps
     tsim = np.linspace(0, sim_length, frames) # query times
     sim_data = simulator.simulate(
         s0,
         tsim,
         dfunc=None,      # disturbance function
         animate=True,    # flag for animation
-        anim_name='vid', # 'NAME' to save the run
-        fps=20.          # frames per second
+        anim_name=None,  # 'NAME' to save the run as 'NAME.mp4'
+        fps=fps          # frames per second
     )
 
     # getting reference data
@@ -157,4 +161,4 @@ if __name__ == "__main__":
     axs[1].set_ylim([-2.0 * safe_rot, 2.0 * safe_rot])
     axs[1].set_xlim([tsim[0], tsim[-1]])
 
-    plt.show()
+    plt.show() # TODO: fix this also showing the simulator when unwanted

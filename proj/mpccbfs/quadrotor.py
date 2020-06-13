@@ -44,7 +44,8 @@ class Quadrotor:
            total thrust in the +z direction and tauxyz are the angular torques.
            These are all with respect to the BODY frame.
         d: Disturbances in the BODY frame in order of (fdb, taudb), where fdb
-           are forces and taudb are torques. Ordered (x,y,z) each.
+           are forces and taudb are torques. Ordered (x,y,z) each. TODO: make
+           it so these are specified in the inertial frame.
     """
 
     def __init__(

@@ -619,7 +619,7 @@ class MultirateQuadController(Controller):
         obj = lambda _u: np.linalg.norm(_u - iv) ** 2 # objective
         sol = minimize(
             obj,
-            np.zeros(4), 
+            np.zeros(self._control_dim), 
             constraints=safety_cons,
             method='SLSQP'
         )
@@ -807,7 +807,8 @@ class MultirateQuadController(Controller):
                     (2. * (x - x_o) * (sphi * spsi + cphi * cpsi * sth) -
                         2. * (y - y_o) * (cpsi * sphi - cphi * spsi * sth) +
                         cphi * cth * 2. * (z - z_o)) / m,
-                    0, 0, 0])
+                    0, 0, 0]
+                )
 
                 if any(np.isnan(self._K_vals[(k_obs + 2), :])):
                     ddh_nom = lf2h_o + lglfh_o @ self._iv

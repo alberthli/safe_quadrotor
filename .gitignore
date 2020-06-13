@@ -1,2 +1,4 @@
-proj/sims
+proj/media
+__pycache__
 *.mp4
+*.pdf

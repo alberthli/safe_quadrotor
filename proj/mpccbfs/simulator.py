@@ -15,7 +15,7 @@ from mpccbfs.obstacles import Obstacle, SphereObstacle
 class SimulationEnvironment:
     """
     Simulation environment for the quadrotor. Note: for some reason matplotlib
-    has not implemented equal aspect ratios for 3d plots for almost a decade.
+    has not implemented equal aspect ratios for 3D plots for almost a decade.
     This means spheres will be ellipsoids. Ridiculous...
 
     The green rotor denotes the front of the quadrotor.
@@ -86,6 +86,7 @@ class SimulationEnvironment:
         Parameters
         ----------
         s: np.ndarray, shape=(12,)
+            State.
         """
 
         assert s.shape == (12,)
@@ -175,12 +176,12 @@ class SimulationEnvironment:
 
         for obs in self._obs_list:
             if obs._otype == 'sphere':
-                u = np.linspace(0, 2 * np.pi, 181)
-                v = np.linspace(0, np.pi, 91)
+                u = np.linspace(0, 2 * np.pi, 21)
+                v = np.linspace(0, np.pi, 21)
                 x = obs._r * np.outer(np.cos(u), np.sin(v)) + obs._c[0]
                 y = obs._r * np.outer(np.sin(u), np.sin(v)) + obs._c[1]
                 z = obs._r * np.outer(np.ones(len(u)), np.cos(v)) + obs._c[2]
-                ax.plot_wireframe(x, y, z, color="r")
+                ax.plot_wireframe(x, y, z, color="r", linewidth=0.1)
 
             else:
                 raise NotImplementedError
@@ -249,6 +250,10 @@ class SimulationEnvironment:
             simulated disturbance.
         animate: bool
             Flag for whether an animation of the run should play.
+        anim_name: str
+            Name for animation file.
+        fps: float
+            Animation frames per second.
 
         Returns
         -------
