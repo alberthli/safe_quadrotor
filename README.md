@@ -1,4 +1,4 @@
-# AA203 MPC with CBFs Project
+# Safe Quadrotor Control and Simulation
 
 ## Overview
 This repository houses a simulator and controller for a quadcopter with a multi-rate controller running a slow MPC linearization-based controller for high-level planning composed with a fast CBF nonlinear controller for low-level safe corrections. The implementation details are based on the work "Multi-Rate Control Design Leveraging Control Barrier Functions and Model Predictive Control Policies" by Rosolia and Ames. It fulfilled a project requirement for the course AA203 at Stanford University.
