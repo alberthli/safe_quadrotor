@@ -6,8 +6,9 @@ from typing import List, Callable
 g = 9.80665 # gravitational acceleration
 
 class Quadrotor:
-    """
-    Quadrotor object. Conventions are from:
+    """Quadrotor object.
+
+    Conventions are from:
 
     'Modelling, Identification and Control of a Quadrotor Helicopter'
 
@@ -55,10 +56,9 @@ class Quadrotor:
         kf: float,
         km: float,
         l: float,
-        Jtp: float = None
+        Jtp: float = None,
     ) -> None:
-        """
-        Quadrotor initialization
+        """Initialize a quadrotor.
 
         Parameters
         ----------
@@ -78,7 +78,6 @@ class Quadrotor:
             Total rotational moment of inertia about the propellor axes. Used
             for computing the gyroscopic effect.
         """
-
         assert I.shape == (3,)
         assert np.all(I > 0.)
         if Jtp is not None:
@@ -93,12 +92,10 @@ class Quadrotor:
 
     @property
     def _U(self) -> np.ndarray:
-        """
-        Matrix converting squared rotor speeds to virtual forces/moments.
+        """Matrix converting squared rotor speeds to virtual forces/moments.
 
         i = U @ wsq
         """
-
         kf = self._kf
         km = self._km
         l = self._l
@@ -113,12 +110,10 @@ class Quadrotor:
 
     @property
     def _invU(self) -> np.ndarray:
-        """
-        Matrix converting virtual forces/moments to squared rotor speeds.
+        """Matrix converting virtual forces/moments to squared rotor speeds.
 
         wsq = invU @ i
         """
-
         kf = self._kf
         km = self._km
         l = self._l
@@ -132,8 +127,7 @@ class Quadrotor:
         return invU
 
     def _Rwb(self, alpha: np.ndarray) -> np.ndarray:
-        """
-        Rotation matrix from BODY to WORLD frame.
+        """Rotation matrix from BODY to WORLD frame.
 
         Parameters
         ----------
@@ -145,7 +139,6 @@ class Quadrotor:
         R: np.ndarray, shape=(3,3)
             Rotation matrix from BODY to WORLD frame.
         """
-
         assert alpha.shape == (3,)
 
         phi, theta, psi = alpha
@@ -168,8 +161,7 @@ class Quadrotor:
         return R
 
     def _Twb(self, alpha: np.ndarray) -> np.ndarray:
-        """
-        Angular velocity transformation matrix from BODY to WORLD frame.
+        """Angular velocity transformation matrix from BODY to WORLD frame.
 
         Parameters
         ----------
@@ -181,7 +173,6 @@ class Quadrotor:
         T: np.ndarray, shape=(3,3)
             Angular velocity transformation matrix from BODY to WORLD frame.
         """
-
         assert alpha.shape == (3,)
 
         phi, theta, _ = alpha
@@ -198,8 +189,7 @@ class Quadrotor:
         return T
 
     def _A(self, s: np.ndarray) -> np.ndarray:
-        """
-        Linearized autonomous dynamics about hover.
+        """Linearized autonomous dynamics.
 
         Parameters
         ----------
@@ -211,7 +201,6 @@ class Quadrotor:
         A: np.ndarray, shape=(12, 12)
             Linearized autonomous dynamics about s.
         """
-
         assert s.shape == (12,)
 
         Ix, Iy, Iz = self._I
@@ -266,8 +255,7 @@ class Quadrotor:
         return A
 
     def _B(self, s: np.ndarray) -> np.ndarray:
-        """
-        Linearized control dynamics.
+        """Linearized control dynamics.
 
         Parameters
         ----------
@@ -279,7 +267,6 @@ class Quadrotor:
         B: np.ndarray, shape=(12, 12)
             Linearized control dynamics about s.
         """
-
         m = self._m
         Ix, Iy, Iz = self._I
         B = np.zeros((12, 4))
@@ -292,8 +279,7 @@ class Quadrotor:
         return B
 
     def _D(self, s) -> np.ndarray:
-        """
-        Linearized disturbance dynamics in BODY frame.
+        """Linearized disturbance dynamics in BODY frame.
 
         Parameters
         ----------
@@ -305,7 +291,6 @@ class Quadrotor:
         D: np.ndarray, shape=(12, 6)
             Linearized disturbance dynamics about s.
         """
-
         m = self._m
         Ix, Iy, Iz = self._I
         D = np.zeros((12, 6))
@@ -318,8 +303,7 @@ class Quadrotor:
         return D
 
     def _fdyn(self, s: np.ndarray) -> np.ndarray:
-        """
-        Quadrotor autonomous dynamics.
+        """Quadrotor autonomous dynamics.
 
         Parameters
         ----------
@@ -331,7 +315,6 @@ class Quadrotor:
         fdyn: np.ndarray, shape=(12,)
             Time derivatives of states from autonomous dynamics.
         """
-
         assert s.shape == (12,)
 
         # states
@@ -368,8 +351,7 @@ class Quadrotor:
         return fdyn
 
     def _gdyn(self, s: np.ndarray) -> np.ndarray:
-        """
-        Quadrotor control dynamics.
+        """Quadrotor control dynamics.
 
         Parameters
         ----------
@@ -381,7 +363,6 @@ class Quadrotor:
         gdyn: np.ndarray, shape=(12, 4)
             Matrix representing affine control dynamics.
         """
-
         assert s.shape == (12,)
 
         # mass and inertias
@@ -401,9 +382,9 @@ class Quadrotor:
         return gdyn
 
     def _wdyn(self, d: np.ndarray) -> np.ndarray:
-        """
-        Quadrotor disturbance dynamics in BODY frame. Global disturbances must
-        first be rotated into the body frame.
+        """Quadrotor disturbance dynamics in BODY frame.
+
+        Global disturbances must first be rotated into the body frame!
 
         Parameters
         ----------
@@ -415,7 +396,6 @@ class Quadrotor:
         w: np.ndarray, shape=(12,)
             Time derivatives of states from disturbance dynamics
         """
-
         assert d.shape == (6,)
 
         # mass and inertias
@@ -436,10 +416,9 @@ class Quadrotor:
         self,
         s: np.ndarray,
         i: np.ndarray,
-        d: np.ndarray = np.zeros(6)
+        d: np.ndarray = np.zeros(6),
     ) -> np.ndarray:
-        """
-        Quadrotor dynamics function.
+        """Quadrotor dynamics function.
 
         Parameters
         ----------
@@ -455,7 +434,6 @@ class Quadrotor:
         ds: np.ndarray, shape=(12,)
             Time derivative of the states.
         """
-
         assert s.shape == (12,)
         assert i.shape == (4,)
         assert d.shape == (6,)

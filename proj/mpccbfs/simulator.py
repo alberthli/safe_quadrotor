@@ -13,10 +13,11 @@ from mpccbfs.obstacles import Obstacle, SphereObstacle
 
 
 class SimulationEnvironment:
-    """
-    Simulation environment for the quadrotor. Note: for some reason matplotlib
-    has not implemented equal aspect ratios for 3D plots for almost a decade.
-    This means spheres will be ellipsoids. Ridiculous...
+    """Simulation environment for the quadrotor.
+
+    Note: for some reason matplotlib has not implemented equal aspect
+    ratios for 3D plots for almost a decade. This means spheres will
+    appear as ellipsoids.
 
     The green rotor denotes the front of the quadrotor.
     """
@@ -28,10 +29,9 @@ class SimulationEnvironment:
         obs_list: List[Obstacle],
         xlim: Tuple[float, float],
         ylim: Tuple[float, float],
-        zlim: Tuple[float, float]
+        zlim: Tuple[float, float],
     ) -> None:
-        """
-        Initializes the simulator.
+        """Initialize the simulator.
 
         Parameters
         ----------
@@ -44,7 +44,6 @@ class SimulationEnvironment:
         xlim/ylim/zlim: Tuple[float, float]
             The x, y, and z limits for plotting environment
         """
-
         self._quad = quad
         self._ctrler = ctrler
         self._obs_list = obs_list
@@ -61,15 +60,13 @@ class SimulationEnvironment:
         self._ax.set_zlim3d(zlim)
 
     def _clear_frame(self, clear_obs: bool = False) -> None:
-        """
-        Clears the environment frame.
+        """Clear the environment frame.
 
         Parameters
         ----------
         clear_obs: bool
             Flag for whether to clear obstacles.
         """
-
         for artist in (self._ax.lines + self._ax.collections):
 
             # obstacles are line collections
@@ -80,15 +77,13 @@ class SimulationEnvironment:
                     artist.remove()
 
     def _draw_quad(self, s) -> None:
-        """
-        Function for drawing the quadcopter in a given state.
+        """Draw the quadcopter in a given state.
 
         Parameters
         ----------
         s: np.ndarray, shape=(12,)
             State.
         """
-
         assert s.shape == (12,)
 
         # quadrotor plotting params
@@ -125,8 +120,7 @@ class SimulationEnvironment:
         self._draw_circle(r4o, l / 2., ro)
 
     def _draw_traj(self, s_sol, ref_traj, i) -> None:
-        """
-        Function for drawing the reference traj and the quadcopter traj. 
+        """Draw the reference traj and the quadcopter traj. 
 
         Parameters
         ----------
@@ -137,7 +131,6 @@ class SimulationEnvironment:
         i: int
             Iteration.
         """
-
         assert s_sol[:, 0].shape == (12,)
 
         ax = self._ax
@@ -165,10 +158,7 @@ class SimulationEnvironment:
         )
 
     def _draw_obs(self) -> None:
-        """
-        Draws obstacles in the environment.
-        """
-
+        """Draw obstacles in the environment."""
         ax = self._ax
 
         if self._obs_list is None:
@@ -182,7 +172,6 @@ class SimulationEnvironment:
                 y = obs._r * np.outer(np.sin(u), np.sin(v)) + obs._c[1]
                 z = obs._r * np.outer(np.ones(len(u)), np.cos(v)) + obs._c[2]
                 ax.plot_wireframe(x, y, z, color="r", linewidth=0.1)
-
             else:
                 raise NotImplementedError
 
@@ -191,10 +180,9 @@ class SimulationEnvironment:
         c: np.ndarray,
         r: float,
         n: np.ndarray,
-        color: str = 'black'
+        color: str = 'black',
     ) -> None:
-        """
-        Draws a circle in the simulation environment.
+        """Draw a circle in the simulation environment.
 
         Parameters
         ----------
@@ -207,7 +195,6 @@ class SimulationEnvironment:
         color: str
             Color of the circle.
         """
-
         assert c.shape == (3,)
         assert n.shape == (3,)
 
@@ -236,8 +223,7 @@ class SimulationEnvironment:
         anim_name: str = None,
         fps: float = 10.,
     ) -> np.ndarray:
-        """
-        Simulates a quadrotor run.
+        """Simulate a quadrotor run.
 
         Parameters
         ----------
@@ -260,7 +246,6 @@ class SimulationEnvironment:
         s_sol: np.ndarray, shape=(12, T)
             Solution trajectories at the query times.
         """
-
         assert s0.shape == (12,)
         assert tsim.ndim == 1
 

@@ -3,31 +3,24 @@ import numpy as np
 
 
 class Obstacle(ABC):
-	"""
-	Abstract class for obstacles.
-	"""
+	"""Abstract class for obstacles."""
 
 	def __init__(self, otype: str) -> None:
-		"""
-		Initializes the obstacle object.
+		"""Initialize an obstacle.
 
 		Parameters
 		----------
 		otype: str
 			The type of obstacle.
 		"""
-
 		super(Obstacle, self).__init__()
 		self._otype = otype
 
 class SphereObstacle(Obstacle):
-	"""
-	Spherical obstacles.
-	"""
+	"""Spherical obstacle."""
 
 	def __init__(self, c: np.ndarray, r: float) -> None:
-		"""
-		Initializes the spherical obstacle.
+		"""Initialize a spherical obstacle.
 
 		Parameters
 		----------
@@ -36,7 +29,6 @@ class SphereObstacle(Obstacle):
 		r: float
 			Radius of sphere.
 		"""
-
 		super(SphereObstacle, self).__init__("sphere")
 
 		assert c.shape == (3,)

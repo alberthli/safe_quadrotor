@@ -6,11 +6,11 @@ This repository houses a simulator and controller for a quadcopter with a multi-
 ## Environmental Management
 Make sure you run the project in a conda virtual environment. To make an environment,
 ```
-conda create --name NAMEOFYOURVENV python=3.8
+conda create --name <env_name> python=3.8
 ```
 Anytime after initializing the environment, activate before using project files:
 ```
-conda activate NAMEOFYOURENV
+conda activate <env_name>
 ```
 To install the dependencies in the project, after activating the environment for the first time, run
 ```

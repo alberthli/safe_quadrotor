@@ -18,6 +18,7 @@ class Controller(ABC):
     """
 
     def __init__(self, n: float, m: float) -> None:
+        """Initialize a controller."""
         super(Controller, self).__init__()
 
         self._n = n
@@ -26,8 +27,7 @@ class Controller(ABC):
 
     @abstractmethod
     def ctrl(self, t: float, s: np.ndarray) -> np.ndarray:
-        """
-        Control law.
+        """Control law.
 
         Parameters
         ----------
@@ -44,13 +44,10 @@ class Controller(ABC):
 
     @abstractmethod
     def reset(self) -> None:
-        """
-        Resets controller between runs.
-        """
+        """Resets controller between runs."""
 
 class PDQuadController(Controller):
-    """
-    A simple PD controller for position control of a quadrotor.
+    """A simple PD controller for position control of a quadrotor.
 
     NOTE: it's pretty hard to tune this controller, very finicky.
     """
@@ -63,10 +60,9 @@ class PDQuadController(Controller):
         kd_xyz: float,
         kp_a: float,
         kd_a: float,
-        ref: Callable[[float], np.ndarray]
+        ref: Callable[[float], np.ndarray],
     ) -> None:
-        """
-        Initialization for the quadrotor PD controller.
+        """Initialize a quadrotor PD controller.
 
         Parameters
         ----------
@@ -82,7 +78,6 @@ class PDQuadController(Controller):
             Reference function. Takes in time, outputs desired (x, y, z, psi).
             Assumes the desired pitch and roll are zero.
         """
-
         assert kp_xyz >= 0.
         assert kd_xyz >= 0.
         assert kp_a >= 0.
@@ -99,9 +94,9 @@ class PDQuadController(Controller):
         self._ref = ref
 
     def _rebalance(self, wsq_cand: np.ndarray) -> np.ndarray:
-        """
-        Rebalances a vector of candidate squared rotor speeds to ensure that
-        they remain non-negative.
+        """Rebalance true quadrotor inputs.
+
+        Ensures candidate squared rotor speeds remain non-negative.
 
         Parameters
         ----------
@@ -113,7 +108,6 @@ class PDQuadController(Controller):
         wsq: np.ndarray, shape=(4,)
             Rebalanced squared rotor speeds.
         """
-
         assert wsq_cand.shape == (4,)
 
         if not any(wsq_cand < 0.):
@@ -121,29 +115,30 @@ class PDQuadController(Controller):
 
         else:
             # recovering commanded correction values
-            D = np.array([         # cors -> wsq
+            D = np.array([          # cors -> wsq
                 [0., -1., -1, 1.],
                 [-1., 0., 1., 1.],
                 [0., 1., -1., 1.],
                 [1., 0., 1., 1.]])
-            invD = np.array([      # wsq -> cors
+            invD = np.array([       # wsq -> cors
                 [0., -2., 0., 2.],
                 [-2., 0., 2., 0.],
                 [-1., 1., -1., 1],
                 [1., 1., 1., 1.]]) / 4.
-            cors = invD @ wsq_cand # (phi, theta, psi, z)
+            cors = invD @ wsq_cand  # (phi, theta, psi, z)
 
             z_off = ( # gravity offset
                 (self._quad._invU @
                     np.array([self._quad._m * g, 0., 0., 0.]))[0]
             )
-            z_cor = cors[0] # z correction
-            max_vio = np.max( # maximum non-negative violation occurs from here
+            z_cor = cors[0]    # z correction
+            max_vio = np.max(  # maximum non-negative violation occurs from here
                 (np.abs(cors[0]) + np.abs(cors[1])),
                 (np.abs(cors[0]) + np.abs(cors[2])),
                 (np.abs(cors[1]) + np.abs(cors[2]))
             )
 
+            # rebalance
             vio_ratio = max_vio / z_cor
             cors /= vio_ratio
             cors[0] = z_cor
@@ -153,8 +148,9 @@ class PDQuadController(Controller):
             return wsq
 
     def ctrl(self, t: float, s: np.ndarray) -> np.ndarray:
-        """
-        PD control law. This is an inner-outer loop controller, where the inner
+        """PD control law.
+
+        This is an inner-outer loop controller, where the inner
         loop controls the states (z, phi, theta, psi) with PID and the outer
         loop sends desired values by converting errors in (x, y, z).
 
@@ -170,7 +166,6 @@ class PDQuadController(Controller):
         i: np.ndarray, shape=(m,)
             Control input.
         """
-
         assert s.shape == (self._n,)
 
         # gains
@@ -234,14 +229,13 @@ class PDQuadController(Controller):
         return i
 
     def reset(self) -> None:
-        """
-        Reset controller. No functionality for this controller.
-        """
+        """Reset controller. Does nothing."""
         pass
 
 class MultirateQuadController(Controller):
-    """
-    A multirate controller for a quadrotor. Design from
+    """A multirate controller for a quadrotor.
+
+    Design from
 
     'Multi-Rate Control Design Leveraging Control Barrier Functions and
     Model Predictive Control Policies'.
@@ -268,8 +262,7 @@ class MultirateQuadController(Controller):
         mpc_R: np.ndarray,
         ref: Callable[[float], np.ndarray],
     ) -> None:
-        """
-        Initialization for the quadrotor multirate controller.
+        """Initialize a quadrotor multirate controller.
 
         Parameters
         ----------
@@ -305,7 +298,6 @@ class MultirateQuadController(Controller):
             gives u, v, w. Then, the angles/angular velocity references can be
             set identically to 0.
         """
-
         super(MultirateQuadController, self).__init__(12, 4)
 
         assert slow_rate > 0.
@@ -367,10 +359,9 @@ class MultirateQuadController(Controller):
         self,
         t: float,
         s: np.ndarray,
-        obs_list: List[Obstacle]
+        obs_list: List[Obstacle],
     ) -> np.ndarray:
-        """
-        Slow control law. Computes the next control action by running MPC.
+        """Slow control law. Computes the next control action by running MPC.
 
         Parameters
         ----------
@@ -384,7 +375,6 @@ class MultirateQuadController(Controller):
         iv: np.ndarray, shape=(m,)
             Control input.
         """
-
         assert s.shape == (self._n,)
 
         # dimensions
@@ -419,9 +409,8 @@ class MultirateQuadController(Controller):
 
         return iv
 
-    def _get_slow_cost(self, t, z, P, Q, R):
-        """
-        Computes cost.
+    def _get_slow_cost(self, t, z, P, Q, R) -> float:
+        """Computes cost.
 
         Parameters
         ----------
@@ -442,7 +431,6 @@ class MultirateQuadController(Controller):
         cost: float
             Cost of the trajectory.
         """
-
         n = self._n
         m = self._control_dim
         T = self._mpc_T
@@ -484,10 +472,14 @@ class MultirateQuadController(Controller):
         s: np.ndarray,
         obs_list: List[Obstacle],
         A: np.ndarray,
-        B: np.ndarray
-    ):
-        """
-        Computes slow control constraints for MPC.
+        B: np.ndarray,
+    ) -> LinearConstraint:
+        """Compute slow control constraints for MPC.
+
+        This controller will completely ignore obstacles, leaving
+        that for the CBF-based low-level controller. This can
+        easily be changed by just added constraints.
+        TODO: add bounds for state and input
 
         Parameters
         ----------
@@ -507,10 +499,6 @@ class MultirateQuadController(Controller):
         cons: LinearConstraint
             LinearConstraint object for quadratic program.        
         """
-
-        # TODO: add obstacle-related constraints
-        # TODO: add bounds for state and input
-
         assert s.shape == (self._n,)
 
         # unpacking variables
@@ -592,10 +580,9 @@ class MultirateQuadController(Controller):
         self,
         t: float,
         s: np.ndarray,
-        obs_list: List[Obstacle]
+        obs_list: List[Obstacle],
     ) -> np.ndarray:
-        """
-        Fast control law. Outputs deviation from _iv using CBFs.
+        """Fast control law. Outputs deviation from _iv using CBFs.
 
         Parameters
         ----------
@@ -611,7 +598,6 @@ class MultirateQuadController(Controller):
         iu: np.ndarray, shape=(m,)
             Control input.
         """
-
         assert s.shape == (self._n,)
 
         iv = self._iv
@@ -623,18 +609,17 @@ class MultirateQuadController(Controller):
             constraints=safety_cons,
             method='SLSQP'
         )
-
         iu = sol.x - iv
-
         return iu
 
     def _get_fast_quad_cons(
         self,
         quad: Quadrotor,
         s: np.ndarray,
-        obs_list: List[Obstacle]
+        obs_list: List[Obstacle],
     ) -> LinearConstraint:
-        """
+        """Compute fast control constraints.
+
         Computes the safety constraints for a quadrotor input in the current
         state. Lie derivatives computed using the symbolic helper function. For
         obstacles, we assume the system can omnisciently observe on the
@@ -659,6 +644,7 @@ class MultirateQuadController(Controller):
         assert s.shape == (12,)
 
         # initializing constraint matrices
+        # NOTE: if more constraints are added, the number "7" needs to be adjusted.
         if obs_list is not None:
             num_constr = 7 + len(obs_list)
         else:
@@ -702,7 +688,6 @@ class MultirateQuadController(Controller):
         m = quad._m
         Ix, Iy, Iz = quad._I
 
-
         # linear velocity
         h_v = v_s ** 2. - (u ** 2. + v ** 2. + w ** 2.)
         lfh_v = 2. * g * (w * cphi * cth - u * sth + v * cth * sphi)
@@ -713,7 +698,6 @@ class MultirateQuadController(Controller):
         Cs.append(-lgh_v)
         lbs.append(-np.array([np.inf]))
         ubs.append(np.array([lfh_v + alpha_v]))
-
 
         # roll limits
         h_phi = ang_s ** 2. - phi ** 2.
@@ -748,7 +732,6 @@ class MultirateQuadController(Controller):
         Cs.append(-lglfh_phi)
         lbs.append(-np.array([np.inf]))
         ubs.append(K_phi @ np.array([h_phi, lfh_phi]) + lf2h_phi)
-
 
         # pitch limits
         h_th = ang_s ** 2. - theta ** 2.
@@ -844,10 +827,7 @@ class MultirateQuadController(Controller):
         return safety_cons
 
     def reset(self) -> None:
-        """
-        Resets the controller internals.
-        """
-
+        """Reset the controller internals."""
         self._slow_T_mem = None
         self._fast_T_mem = None
         self._iv = None
@@ -859,10 +839,9 @@ class MultirateQuadController(Controller):
         self,
         t: float,
         s: np.ndarray,
-        obs_list: List[Obstacle]
+        obs_list: List[Obstacle],
     ) -> np.ndarray:
-        """
-        Multirate control law.
+        """Multirate control law.
 
         Parameters
         ----------
