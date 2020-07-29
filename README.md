@@ -19,3 +19,16 @@ pip install -r requirements.txt
 
 ## Implementations
 There are two controllers on master. The first is a simple PD controller and the second is the safe multirate MPC controller. You can adjust the rates at which the CBF is applied and the MPC discretization. The logic for generating the CBFs and their Lie derivatives is located in proj/extra as a MATLAB script. There is currently only support for spherical obstacles.
+
+## Citing
+If this work is at all useful for you, please use the following citation
+```
+@misc{Li2020_safe_quad,
+  author = {Albert Li, Brent Yi, Daniel Sotsaikich},
+  title = {Safe Quadrotor Control and Simulation},
+  year = {2020},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  howpublished = {\url{https://github.com/alberthli/safe_quadrotor}},
+}
+```
