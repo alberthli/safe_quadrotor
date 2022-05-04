@@ -1,9 +1,8 @@
 import numpy as np
-from typing import List, Callable
-
 
 # constants
-g = 9.80665 # gravitational acceleration
+g = 9.80665  # gravitational acceleration
+
 
 class Quadrotor:
     """Quadrotor object.
@@ -79,9 +78,9 @@ class Quadrotor:
             for computing the gyroscopic effect.
         """
         assert I.shape == (3,)
-        assert np.all(I > 0.)
+        assert np.all(I > 0.0)
         if Jtp is not None:
-            assert Jtp > 0.
+            assert Jtp > 0.0
 
         self._m = m
         self._I = I
@@ -100,11 +99,14 @@ class Quadrotor:
         km = self._km
         l = self._l
 
-        U = np.array([
-            [kf, kf, kf, kf],
-            [0., -kf * l, 0., kf * l],
-            [-kf * l, 0., kf * l, 0.],
-            [-km, km, -km, km]])
+        U = np.array(
+            [
+                [kf, kf, kf, kf],
+                [0.0, -kf * l, 0.0, kf * l],
+                [-kf * l, 0.0, kf * l, 0.0],
+                [-km, km, -km, km],
+            ]
+        )
 
         return U
 
@@ -118,11 +120,17 @@ class Quadrotor:
         km = self._km
         l = self._l
 
-        invU = np.array([
-            [1. / kf, 0., -2. / (kf * l), -1. / km],
-            [1. / kf, -2. / (kf * l), 0., 1 / km],
-            [1. / kf, 0., 2. / (kf * l), -1. / km],
-            [1. / kf, 2. / (kf * l), 0., 1. / km]]) / 4.
+        invU = (
+            np.array(
+                [
+                    [1.0 / kf, 0.0, -2.0 / (kf * l), -1.0 / km],
+                    [1.0 / kf, -2.0 / (kf * l), 0.0, 1 / km],
+                    [1.0 / kf, 0.0, 2.0 / (kf * l), -1.0 / km],
+                    [1.0 / kf, 2.0 / (kf * l), 0.0, 1.0 / km],
+                ]
+            )
+            / 4.0
+        )
 
         return invU
 
@@ -149,14 +157,21 @@ class Quadrotor:
         sth = np.sin(theta)
         spsi = np.sin(psi)
 
-        R = np.array([
-            [cth * cpsi,                          # row 1
-                sphi * sth * cpsi - cphi * spsi,
-                cphi * sth * cpsi + sphi * spsi],
-            [cth * spsi,                          # row 2
-                sphi * sth * spsi + cphi * cpsi,
-                cphi * sth * spsi - sphi * cpsi],
-            [-sth, sphi * cth, cphi * cth]])      # row 3
+        R = np.array(
+            [
+                [
+                    cth * cpsi,  # row 1
+                    sphi * sth * cpsi - cphi * spsi,
+                    cphi * sth * cpsi + sphi * spsi,
+                ],
+                [
+                    cth * spsi,  # row 2
+                    sphi * sth * spsi + cphi * cpsi,
+                    cphi * sth * spsi - sphi * cpsi,
+                ],
+                [-sth, sphi * cth, cphi * cth],
+            ]
+        )  # row 3
 
         return R
 
@@ -181,10 +196,13 @@ class Quadrotor:
         sphi = np.sin(phi)
         tth = np.tan(theta)
 
-        T = np.array([
-            [1., sphi * tth, cphi * tth],
-            [0., cphi, -sphi],
-            [0., sphi / cth, cphi / cth]])
+        T = np.array(
+            [
+                [1.0, sphi * tth, cphi * tth],
+                [0.0, cphi, -sphi],
+                [0.0, sphi / cth, cphi / cth],
+            ]
+        )
 
         return T
 
@@ -219,37 +237,68 @@ class Quadrotor:
 
         A = np.zeros((12, 12))
 
-        A[0, 3:9] = np.array([v * (sphi * spsi + cphi * cpsi * sth) +
-            w * (cphi * spsi - cpsi * sphi * sth),
-            w * cphi * cpsi * cth - u * cpsi * sth + v * cpsi * cth * sphi,
-            w * (cpsi * sphi - cphi * spsi * sth) - v * (cphi * cpsi +
-                sphi * spsi * sth) - u * cth * spsi, cpsi * cth,
-            cpsi * sphi * sth - cphi * spsi, sphi * spsi + cphi * cpsi * sth])
-        A[1, 3:9] = np.array([-v * (cpsi * sphi - cphi * spsi * sth) -
-            w * (cphi *cpsi + sphi * spsi * sth),
-            w * cphi * cth * spsi - u * spsi * sth + v * cth * sphi * spsi,
-            w * (sphi * spsi + cphi * cpsi * sth) - v * (cphi * spsi -
-                cpsi * sphi * sth) + u * cpsi * cth, cth*spsi, cphi*cpsi +
-            sphi * spsi * sth, cphi * spsi * sth - cpsi * sphi])
-        A[2, 3:9] = np.array([v * cphi * cth - w * cth * sphi, -u * cth -
-            w * cphi * sth - v * sphi * sth, 0., -sth, cth * sphi, cphi * cth])
-        A[3, 3:5] = np.array([q * cphi * tth - r * sphi * tth, r * cphi *
-            (tth ** 2. + 1.) + q * sphi * (tth ** 2. + 1.)])
-        A[3, 9:12] = np.array([1., sphi * tth, cphi * tth])
+        A[0, 3:9] = np.array(
+            [
+                v * (sphi * spsi + cphi * cpsi * sth)
+                + w * (cphi * spsi - cpsi * sphi * sth),
+                w * cphi * cpsi * cth - u * cpsi * sth + v * cpsi * cth * sphi,
+                w * (cpsi * sphi - cphi * spsi * sth)
+                - v * (cphi * cpsi + sphi * spsi * sth)
+                - u * cth * spsi,
+                cpsi * cth,
+                cpsi * sphi * sth - cphi * spsi,
+                sphi * spsi + cphi * cpsi * sth,
+            ]
+        )
+        A[1, 3:9] = np.array(
+            [
+                -v * (cpsi * sphi - cphi * spsi * sth)
+                - w * (cphi * cpsi + sphi * spsi * sth),
+                w * cphi * cth * spsi - u * spsi * sth + v * cth * sphi * spsi,
+                w * (sphi * spsi + cphi * cpsi * sth)
+                - v * (cphi * spsi - cpsi * sphi * sth)
+                + u * cpsi * cth,
+                cth * spsi,
+                cphi * cpsi + sphi * spsi * sth,
+                cphi * spsi * sth - cpsi * sphi,
+            ]
+        )
+        A[2, 3:9] = np.array(
+            [
+                v * cphi * cth - w * cth * sphi,
+                -u * cth - w * cphi * sth - v * sphi * sth,
+                0.0,
+                -sth,
+                cth * sphi,
+                cphi * cth,
+            ]
+        )
+        A[3, 3:5] = np.array(
+            [
+                q * cphi * tth - r * sphi * tth,
+                r * cphi * (tth**2.0 + 1.0) + q * sphi * (tth**2.0 + 1.0),
+            ]
+        )
+        A[3, 9:12] = np.array([1.0, sphi * tth, cphi * tth])
         A[4, 3] = -r * cphi - q * sphi
         A[4, 10:12] = np.array([cphi, -sphi])
-        A[5, 3:5] = np.array([(q * cphi) / cth - (r * sphi) / cth,
-            (r * cphi * sth) / cth ** 2 + (q * sphi * sth) / cth ** 2])
+        A[5, 3:5] = np.array(
+            [
+                (q * cphi) / cth - (r * sphi) / cth,
+                (r * cphi * sth) / cth**2 + (q * sphi * sth) / cth**2,
+            ]
+        )
         A[5, 10:12] = np.array([sphi / cth, cphi / cth])
         A[6, 4] = g * cth
-        A[6, 7:12] = np.array([r, -q, 0., -w, v])
-        A[7, 3:12] = np.array([-g * cphi * cth, g * sphi * sth,
-            0., -r, 0., p, w, 0., -u])
-        A[8, 3:12] = np.array([g * cth * sphi, g * cphi * sth,
-            0., q, -p, 0., -v, u, 0.])
+        A[6, 7:12] = np.array([r, -q, 0.0, -w, v])
+        A[7, 3:12] = np.array(
+            [-g * cphi * cth, g * sphi * sth, 0.0, -r, 0.0, p, w, 0.0, -u]
+        )
+        A[8, 3:12] = np.array(
+            [g * cth * sphi, g * cphi * sth, 0.0, q, -p, 0.0, -v, u, 0.0]
+        )
         A[9, 10:12] = np.array([(r * (Iy - Iz)) / Ix, (q * (Iy - Iz)) / Ix])
-        A[10, 9:12] = np.array([-(r * (Ix - Iz)) / Iy, 0.,
-            -(p * (Ix - Iz)) / Iy])
+        A[10, 9:12] = np.array([-(r * (Ix - Iz)) / Iy, 0.0, -(p * (Ix - Iz)) / Iy])
         A[11, 9:11] = np.array([(q * (Ix - Iy)) / Iz, (p * (Ix - Iy)) / Iz])
 
         return A
@@ -271,10 +320,10 @@ class Quadrotor:
         Ix, Iy, Iz = self._I
         B = np.zeros((12, 4))
 
-        B[8, 0] = 1. / m
-        B[9, 1] = 1. / Ix
-        B[10, 2] = 1. / Iy
-        B[11, 3] = 1. / Iz
+        B[8, 0] = 1.0 / m
+        B[9, 1] = 1.0 / Ix
+        B[10, 2] = 1.0 / Iy
+        B[11, 3] = 1.0 / Iz
 
         return B
 
@@ -296,9 +345,9 @@ class Quadrotor:
         D = np.zeros((12, 6))
 
         D[6:9, 0:3] = np.eye(3) / m
-        D[9, 3] = 1. / Ix
-        D[10, 4] = 1. / Iy
-        D[11, 5] = 1. / Iz
+        D[9, 3] = 1.0 / Ix
+        D[10, 4] = 1.0 / Iy
+        D[11, 5] = 1.0 / Iz
 
         return D
 
@@ -318,9 +367,9 @@ class Quadrotor:
         assert s.shape == (12,)
 
         # states
-        alpha = s[3:6]     # phi, theta, psi
-        do_b = s[6:9]      # u, v, w
-        dalpha_b = s[9:12] # p, q, r
+        alpha = s[3:6]  # phi, theta, psi
+        do_b = s[6:9]  # u, v, w
+        dalpha_b = s[9:12]  # p, q, r
 
         # moments of inertia
         Ix, Iy, Iz = self._I
@@ -338,14 +387,20 @@ class Quadrotor:
         p, q, r = dalpha_b
         phi, th, _ = alpha
 
-        ddo_b = np.array([
-            r * v - q * w + g * np.sin(th),
-            p * w - r * u - g * np.sin(phi) * np.cos(th),
-            q * u - p * v - g * np.cos(th) * np.cos(phi)])
-        ddalpha_b = np.array([
-            ((Iy - Iz) * q * r) / Ix,
-            ((Iz - Ix) * p * r) / Iy,
-            ((Ix - Iy) * p * q) / Iz])
+        ddo_b = np.array(
+            [
+                r * v - q * w + g * np.sin(th),
+                p * w - r * u - g * np.sin(phi) * np.cos(th),
+                q * u - p * v - g * np.cos(th) * np.cos(phi),
+            ]
+        )
+        ddalpha_b = np.array(
+            [
+                ((Iy - Iz) * q * r) / Ix,
+                ((Iz - Ix) * p * r) / Iy,
+                ((Ix - Iy) * p * q) / Iz,
+            ]
+        )
 
         fdyn = np.hstack((do, dalpha, ddo_b, ddalpha_b))
         return fdyn
@@ -371,12 +426,12 @@ class Quadrotor:
 
         # accelerations
         ddo_b = np.zeros((3, 4))
-        ddo_b[2, 0] = 1. / m
+        ddo_b[2, 0] = 1.0 / m
 
         ddalpha_b = np.zeros((3, 4))
-        ddalpha_b[0, 1] = 1. / Ix
-        ddalpha_b[1, 2] = 1. / Iy
-        ddalpha_b[2, 3] = 1. / Iz
+        ddalpha_b[0, 1] = 1.0 / Ix
+        ddalpha_b[1, 2] = 1.0 / Iy
+        ddalpha_b[2, 3] = 1.0 / Iz
 
         gdyn = np.vstack((np.zeros((6, 4)), ddo_b, ddalpha_b))
         return gdyn
@@ -454,11 +509,11 @@ class Quadrotor:
             q = s[10]
 
             wsq = self._invU @ i
-            assert all(wsq >= 0.)
+            assert all(wsq >= 0.0)
             w = np.sqrt(wsq)
             w[0] *= -1
             w[2] *= -1
-            Omega = np.sum(w) # net prop speeds
+            Omega = np.sum(w)  # net prop speeds
 
             ds_gyro[9] = -Jtp * q * Omega / Ix
             ds_gyro[10] = Jtp * p * Omega / Iy

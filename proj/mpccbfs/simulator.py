@@ -1,15 +1,14 @@
-import numpy as np
-from typing import Callable, Tuple, List
-from scipy.integrate import solve_ivp
+from typing import Callable, List, Tuple
 
+import matplotlib.animation as animation
 import matplotlib.pyplot as plt
 import mpl_toolkits
 import mpl_toolkits.mplot3d.axes3d as p3
-import matplotlib.animation as animation
-
-from mpccbfs.quadrotor import Quadrotor
+import numpy as np
 from mpccbfs.controllers import Controller, MultirateQuadController
-from mpccbfs.obstacles import Obstacle, SphereObstacle
+from mpccbfs.obstacles import Obstacle
+from mpccbfs.quadrotor import Quadrotor
+from scipy.integrate import solve_ivp
 
 
 class SimulationEnvironment:
@@ -50,7 +49,7 @@ class SimulationEnvironment:
 
         self._fig = plt.figure()
         self._ax = p3.Axes3D(self._fig)
-        self._ax.set_proj_type('ortho')
+        self._ax.set_proj_type("ortho")
         self._ax.grid(False)
         self._ax.set_xticks([])
         self._ax.set_yticks([])
@@ -67,7 +66,7 @@ class SimulationEnvironment:
         clear_obs: bool
             Flag for whether to clear obstacles.
         """
-        for artist in (self._ax.lines + self._ax.collections):
+        for artist in self._ax.lines + self._ax.collections:
 
             # obstacles are line collections
             if not type(artist) == mpl_toolkits.mplot3d.art3d.Line3DCollection:
@@ -89,18 +88,18 @@ class SimulationEnvironment:
         # quadrotor plotting params
         quad = self._quad
         l = quad._l
-        o = s[0:3] # x, y, z
-        alpha = s[3:6] # phi, theta, psi
+        o = s[0:3]  # x, y, z
+        alpha = s[3:6]  # phi, theta, psi
         Rwb = quad._Rwb(alpha)
 
         # rotor base locations on frame in inertial frame
-        r1 = o + Rwb @ np.array([l, 0., 0.])
-        r2 = o + Rwb @ np.array([0., -l, 0.])
-        r3 = o + Rwb @ np.array([-l, 0., 0.])
-        r4 = o + Rwb @ np.array([0., l, 0.])
+        r1 = o + Rwb @ np.array([l, 0.0, 0.0])
+        r2 = o + Rwb @ np.array([0.0, -l, 0.0])
+        r3 = o + Rwb @ np.array([-l, 0.0, 0.0])
+        r4 = o + Rwb @ np.array([0.0, l, 0.0])
 
         # rotor vertical offsets
-        ro = Rwb @ np.array([0., 0., l / 10.])
+        ro = Rwb @ np.array([0.0, 0.0, l / 10.0])
         r1o = r1 + ro
         r2o = r2 + ro
         r3o = r3 + ro
@@ -108,19 +107,19 @@ class SimulationEnvironment:
 
         # drawing quadrotor body and rotors
         ax = self._ax
-        ax.plot([r2[0], r4[0]], [r2[1], r4[1]], [r2[2], r4[2]], 'k-')
-        ax.plot([r1[0], r3[0]], [r1[1], r3[1]], [r1[2], r3[2]], 'k-')
-        ax.plot([r1[0], r1o[0]], [r1[1], r1o[1]], [r1[2], r1o[2]], 'k-')
-        ax.plot([r2[0], r2o[0]], [r2[1], r2o[1]], [r2[2], r2o[2]], 'k-')
-        ax.plot([r3[0], r3o[0]], [r3[1], r3o[1]], [r3[2], r3o[2]], 'k-')
-        ax.plot([r4[0], r4o[0]], [r4[1], r4o[1]], [r4[2], r4o[2]], 'k-')
-        self._draw_circle(r1o, l / 2., ro, color='green')
-        self._draw_circle(r2o, l / 2., ro)
-        self._draw_circle(r3o, l / 2., ro)
-        self._draw_circle(r4o, l / 2., ro)
+        ax.plot([r2[0], r4[0]], [r2[1], r4[1]], [r2[2], r4[2]], "k-")
+        ax.plot([r1[0], r3[0]], [r1[1], r3[1]], [r1[2], r3[2]], "k-")
+        ax.plot([r1[0], r1o[0]], [r1[1], r1o[1]], [r1[2], r1o[2]], "k-")
+        ax.plot([r2[0], r2o[0]], [r2[1], r2o[1]], [r2[2], r2o[2]], "k-")
+        ax.plot([r3[0], r3o[0]], [r3[1], r3o[1]], [r3[2], r3o[2]], "k-")
+        ax.plot([r4[0], r4o[0]], [r4[1], r4o[1]], [r4[2], r4o[2]], "k-")
+        self._draw_circle(r1o, l / 2.0, ro, color="green")
+        self._draw_circle(r2o, l / 2.0, ro)
+        self._draw_circle(r3o, l / 2.0, ro)
+        self._draw_circle(r4o, l / 2.0, ro)
 
     def _draw_traj(self, s_sol, ref_traj, i) -> None:
-        """Draw the reference traj and the quadcopter traj. 
+        """Draw the reference traj and the quadcopter traj.
 
         Parameters
         ----------
@@ -136,25 +135,20 @@ class SimulationEnvironment:
         ax = self._ax
 
         # Plot quadcopter traj
-        ax.plot(
-            s_sol[0, :(i + 1)],
-            s_sol[1, :(i + 1)],
-            s_sol[2, :(i + 1)],
-            'c--'
-        )
+        ax.plot(s_sol[0, : (i + 1)], s_sol[1, : (i + 1)], s_sol[2, : (i + 1)], "c--")
 
         # Plot reference traj
         ax.plot(
-            ref_traj[0, :(i + 1)],
-            ref_traj[1, :(i + 1)],
-            ref_traj[2, :(i + 1)],
-            'm--'
+            ref_traj[0, : (i + 1)],
+            ref_traj[1, : (i + 1)],
+            ref_traj[2, : (i + 1)],
+            "m--",
         )
         ax.plot(
-            ref_traj[0, i:(i + 1)],
-            ref_traj[1, i:(i + 1)], 
-            ref_traj[2, i:(i + 1)],
-            '.m'
+            ref_traj[0, i : (i + 1)],
+            ref_traj[1, i : (i + 1)],
+            ref_traj[2, i : (i + 1)],
+            ".m",
         )
 
     def _draw_obs(self) -> None:
@@ -165,7 +159,7 @@ class SimulationEnvironment:
             return
 
         for obs in self._obs_list:
-            if obs._otype == 'sphere':
+            if obs._otype == "sphere":
                 u = np.linspace(0, 2 * np.pi, 21)
                 v = np.linspace(0, np.pi, 21)
                 x = obs._r * np.outer(np.cos(u), np.sin(v)) + obs._c[0]
@@ -180,7 +174,7 @@ class SimulationEnvironment:
         c: np.ndarray,
         r: float,
         n: np.ndarray,
-        color: str = 'black',
+        color: str = "black",
     ) -> None:
         """Draw a circle in the simulation environment.
 
@@ -221,7 +215,7 @@ class SimulationEnvironment:
         dfunc: Callable[[float, np.ndarray], np.ndarray] = None,
         animate: bool = False,
         anim_name: str = None,
-        fps: float = 10.,
+        fps: float = 10.0,
     ) -> np.ndarray:
         """Simulate a quadrotor run.
 
@@ -265,11 +259,8 @@ class SimulationEnvironment:
 
         # simulating dynamics
         sol = solve_ivp(
-            dyn,
-            (tsim[0], tsim[-1]),
-            s0,
-            t_eval=tsim,
-            max_step=self._ctrler._sim_dt) # cap framerate of reality
+            dyn, (tsim[0], tsim[-1]), s0, t_eval=tsim, max_step=self._ctrler._sim_dt
+        )  # cap framerate of reality
         s_sol = sol.y
 
         # Get ref traj for plotting
@@ -291,13 +282,13 @@ class SimulationEnvironment:
                 self._draw_traj(s_sol, ref_traj, i)
 
             anim = animation.FuncAnimation(
-                self._fig, _anim_quad, interval=20., frames=len(tsim)
+                self._fig, _anim_quad, interval=20.0, frames=len(tsim)
             )
 
             if anim_name is not None:
-                Writer = animation.writers['ffmpeg']
+                Writer = animation.writers["ffmpeg"]
                 writer = Writer(fps=fps, bitrate=1800)
-                anim.save('{}.mp4'.format(anim_name), writer=writer)
+                anim.save("{}.mp4".format(anim_name), writer=writer)
 
             plt.show()
             self._clear_frame(clear_obs=True)
