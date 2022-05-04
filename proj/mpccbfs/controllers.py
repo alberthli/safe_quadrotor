@@ -1,9 +1,11 @@
 import numpy as np
 import scipy
-from scipy.optimize import minimize, LinearConstraint
+from scipy.linalg import block_diag
+from scipy.optimize import minimize, LinearConstraint, NonlinearConstraint
 from scipy.signal import place_poles
+from scipy.sparse import bsr_matrix
 from abc import ABC, abstractmethod
-from typing import Callable, List
+from typing import Callable, List, Optional, Union
 
 from mpccbfs.quadrotor import Quadrotor
 from mpccbfs.obstacles import Obstacle, SphereObstacle
@@ -261,6 +263,9 @@ class MultirateQuadController(Controller):
         mpc_Q: np.ndarray,
         mpc_R: np.ndarray,
         ref: Callable[[float], np.ndarray],
+        mpc_only: Optional[bool] = False,
+        mpc_vel: Optional[bool] = False,
+        mpc_obs: Optional[bool] = False,
     ) -> None:
         """Initialize a quadrotor multirate controller.
 
@@ -297,6 +302,12 @@ class MultirateQuadController(Controller):
             like cubic spline interpolation between waypoints, which also
             gives u, v, w. Then, the angles/angular velocity references can be
             set identically to 0.
+        mpc_only: Optional[bool], default=False
+            Optional kwarg indicating whether to only use MPC or not.
+        mpc_obs: Optional[bool], default=False
+            Optional kwarg indicating whether the MPC loop accounts for velocity.
+        mpc_obs: Optional[bool], default=False
+            Optional kwarg indicating whether the MPC loop accounts for obstacles.
         """
         super(MultirateQuadController, self).__init__(12, 4)
 
@@ -354,6 +365,9 @@ class MultirateQuadController(Controller):
         self._mpc_Q = mpc_Q
         self._mpc_R = mpc_R
         self._ref = ref
+        self._mpc_only = mpc_only
+        self._mpc_vel = mpc_vel
+        self._mpc_obs = mpc_obs
 
     def _slow_ctrl(
         self,
@@ -399,17 +413,54 @@ class MultirateQuadController(Controller):
         safety_cons = self._get_slow_quad_cons(
             self._quad, s, obs_list, A, B
         )
-        sol = minimize(
-            obj,
-            np.zeros((n * (T + 1) + m * T)),
-            constraints=safety_cons,
-            method='SLSQP'
-        )
+        if (self._mpc_obs and obs_list is not None) or self._mpc_vel:
+            # computing state reference values over horizon
+            r = np.zeros(n * (T + 1) + m * T)
+            for i in range(T + 1):
+                r[(n * i) : n * (i + 1)] = self._ref(t + i * self._slow_dt)
+
+            # static Hessian
+            H = block_diag(
+                *[np.kron(np.eye(T), 2*Q), 2*P, np.kron(np.eye(T), 4*R) + np.kron(np.diag(np.ones(T-1),1), -2*R) + np.kron(np.diag(np.ones(T-1),-1), -2*R)]
+            )
+            H[-1, -1] /= 2
+            H = bsr_matrix(H)
+
+            u_p = np.zeros(m)
+            u_p[0] = self._quad._m * g
+            u_eq_subtract = np.zeros(n * (T + 1) + m * T)
+            u_eq_subtract[(n * (T + 1)) : (n * (T + 1) + m)] = 2 * R @ u_p
+            jac = lambda x: H @ (x - r) - u_eq_subtract
+            hess = lambda x: H
+
+            sol = minimize(
+                obj,
+                np.zeros((n * (T + 1) + m * T)),
+                jac=jac,
+                hess=hess,
+                constraints=safety_cons,
+                method='trust-constr',
+                options={'sparse_jacobian': True},
+            )
+        else:
+            sol = minimize(
+                obj,
+                np.zeros((n * (T + 1) + m * T)),
+                constraints=safety_cons,
+                method='SLSQP',
+            )
         iv = sol.x[(n * (T + 1)) : (n * (T + 1)) + m]
 
         return iv
 
-    def _get_slow_cost(self, t, z, P, Q, R) -> float:
+    def _get_slow_cost(
+        self,
+        t: float,
+        z: np.ndarray,
+        P: np.ndarray,
+        Q: np.ndarray,
+        R: np.ndarray,
+    ) -> float:
         """Computes cost.
 
         Parameters
@@ -453,11 +504,11 @@ class MultirateQuadController(Controller):
         rf = self._ref(t + T * self._slow_dt)
         cost += (xf - rf) @ P @ (xf - rf)
 
-        # input costs - minimization deviation from previous control
+        # input costs - minimize deviation from previous control
         u_prev = self._iv
         if u_prev is None:
             u_prev = np.zeros(m)
-            u_prev[0] = self._quad._m * g
+            u_prev[0] = self._quad._m * g  # equilibrium thrust
 
         for i in range(T):
             u = us[(m * i) : (m * (i + 1))]
@@ -473,12 +524,23 @@ class MultirateQuadController(Controller):
         obs_list: List[Obstacle],
         A: np.ndarray,
         B: np.ndarray,
-    ) -> LinearConstraint:
+    ) -> Union[LinearConstraint, NonlinearConstraint]:
         """Compute slow control constraints for MPC.
 
-        This controller will completely ignore obstacles, leaving
-        that for the CBF-based low-level controller. This can
-        easily be changed by just added constraints.
+        Constraints include:
+        - rotor speed non-negativity constraints
+        - (linearized) dynamics constraints
+        - maximum angular tilt constraints
+
+        If the optional flag mpc_vel in the controller is set to
+        False, this controller does not include velocity
+        constraints. Else, it adds the constraints.
+
+        If the optional flag mpc_obs in the controller is set to
+        False, this controller will completely ignore obstacles,
+        leaving that for the CBF-based low-level controller. Else,
+        it adds the constraints here.
+
         TODO: add bounds for state and input
 
         Parameters
@@ -496,7 +558,7 @@ class MultirateQuadController(Controller):
 
         Returns
         -------
-        cons: LinearConstraint
+        cons: Union[LinearConstraint, NonlinearConstraint]
             LinearConstraint object for quadratic program.        
         """
         assert s.shape == (self._n,)
@@ -561,6 +623,68 @@ class MultirateQuadController(Controller):
             lbineqs.append(lb)
             ubineqs.append(ub)
 
+        
+        # [optional] velocity constraints. These constraints are NOT linear.
+        nl_cons = []
+        if self._mpc_vel:
+            sv = self._safe_vel
+
+            for i in range(T + 1):
+                f_cons = lambda x: x[n * i + 6] ** 2 + x[n * i + 7] ** 2 + x[n * i + 8] ** 2
+                def J_cons(x):
+                    J = np.zeros(l)
+                    J[n * i + 6] = 2 * x[n * i + 6]
+                    J[n * i + 7] = 2 * x[n * i + 7]
+                    J[n * i + 8] = 2 * x[n * i + 8]
+                    return J
+                def H_cons(x, v):
+                    H = np.zeros((l, l))
+                    H[n * i + 6, n * i + 6] = 2
+                    H[n * i + 7, n * i + 7] = 2
+                    H[n * i + 8, n * i + 8] = 2
+                    return H
+                lb = -sv
+                ub = sv
+
+                cons = NonlinearConstraint(f_cons, lb, ub, jac=J_cons, hess=H_cons)
+                nl_cons.append(cons)
+
+        # [optional] obstacle constraints. These constraints are NOT linear.
+        if self._mpc_obs and obs_list is not None:
+            d_s = self._safe_dist
+            num_obs = len(obs_list)
+
+            for k_obs in range(len(obs_list)):
+                obs = obs_list[k_obs]
+
+                if obs._otype == 'sphere':
+                    c_o = obs._c
+                    x_o, y_o, z_o = c_o # obs center
+                    r_o = obs._r        # obs radius
+                    d_so = r_o + d_s    # obs safe distance
+
+                    for i in range(T + 1):
+                        f_cons = lambda x: (x[n * i] - x_o) ** 2 + (x[1 + n * i] - y_o) ** 2 + (x[2 + n * i] - z_o) ** 2
+                        def J_cons(x):
+                            J = np.zeros(l)
+                            J[n * i] = 2 * (x[n * i] - x_o)
+                            J[1 + n * i] = 2 * (x[1 + n * i] - y_o)
+                            J[2 + n * i] = 2 * (x[2 + n * i] - z_o)
+                            return J
+                        def H_cons(x, v):
+                            H = np.zeros((l, l))
+                            H[n * i, n * i] = 2
+                            H[1 + n * i, 1 + n * i] = 2
+                            H[2 + n * i, 2 + n * i] = 2
+                            return H
+                        lb = d_so ** 2
+                        ub = np.inf
+
+                        cons = NonlinearConstraint(f_cons, lb, ub, jac=J_cons, hess=H_cons)
+                        nl_cons.append(cons)
+                else:
+                    raise NotImplementedError
+
         # consolidating constraints
         Cineq = np.vstack(Cineqs)
         lbineq = np.hstack(lbineqs)
@@ -571,10 +695,12 @@ class MultirateQuadController(Controller):
         ubeq = np.hstack(ubeqs)
 
         # constraint object
-        safety_cons_eq = LinearConstraint(Ceq, lbeq, ubeq)
-        safety_cons_ineq = LinearConstraint(Cineq, lbineq, ubineq)
-        safety_cons = [safety_cons_eq, safety_cons_ineq]
-        return safety_cons
+        lin_cons_eq = LinearConstraint(Ceq, lbeq, ubeq)
+        lin_cons_ineq = LinearConstraint(Cineq, lbineq, ubineq)
+        cons = [lin_cons_eq, lin_cons_ineq]
+        if (self._mpc_obs and obs_list is not None) or self._mpc_vel:
+            cons = cons + nl_cons
+        return cons
 
     def _fast_ctrl(
         self,
@@ -624,7 +750,7 @@ class MultirateQuadController(Controller):
         state. Lie derivatives computed using the symbolic helper function. For
         obstacles, we assume the system can omnisciently observe on the
         obstacle parameters. This simplifies the ECBF computations greatly. Also
-        has a non-negativity constraints on the rotor speeds.
+        has non-negativity constraints on the rotor speeds.
 
         Parameters
         ----------
@@ -822,7 +948,6 @@ class MultirateQuadController(Controller):
         ub = np.hstack(ubs)
 
         # constraint object
-        # safety_cons = LinearConstraint(A, lb, ub)
         safety_cons = LinearConstraint(C, lb, ub)
         return safety_cons
 
@@ -866,7 +991,10 @@ class MultirateQuadController(Controller):
             self._fast_T_mem = t
 
             self._iv = self._slow_ctrl(t, s, obs_list)
-            self._iu = self._fast_ctrl(t, s, obs_list)
+            if self._mpc_only:
+                self._iu = self._fast_ctrl(t, s, obs_list)
+            else:
+                self._iu = np.zeros(self._control_dim)
 
             assert self._iv.shape == (self._control_dim,)
             assert self._iu.shape == (self._control_dim,)
@@ -875,7 +1003,7 @@ class MultirateQuadController(Controller):
 
         # slow control update
         if (t - self._slow_T_mem) > self._slow_dt:
-            print(t) # DEBUG
+            print(t) # [DEBUG]
             self._slow_T_mem = self._slow_T_mem + self._slow_dt
             self._iv = self._slow_ctrl(t, s, obs_list)
             assert self._iv.shape == (self._control_dim,)
@@ -883,7 +1011,10 @@ class MultirateQuadController(Controller):
         # fast control update
         if (t - self._fast_T_mem) > self._fast_dt:
             self._fast_T_mem = self._fast_T_mem + self._fast_dt
-            self._iu = self._fast_ctrl(t, s, obs_list)
+            if self._mpc_only:
+                self._iu = self._fast_ctrl(t, s, obs_list)
+            else:
+                self._iu = np.zeros(self._control_dim)
             assert self._iu.shape == (self._control_dim,)
 
         # non-negativity check - for some reason the optimizer sometimes
