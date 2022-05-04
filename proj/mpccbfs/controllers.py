@@ -658,8 +658,8 @@ class MultirateQuadController(Controller):
                     H[n * i + 8, n * i + 8] = 2
                     return H
 
-                lb = -sv
-                ub = sv
+                lb = 0
+                ub = sv**2
 
                 cons = NonlinearConstraint(f_cons, lb, ub, jac=J_cons, hess=H_cons)
                 nl_cons.append(cons)

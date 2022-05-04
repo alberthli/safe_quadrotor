@@ -73,9 +73,10 @@ mrc = MultirateQuadController(
 )
 
 # OBSTACLES #
-obs1 = SphereObstacle(np.array([0.0, 1.0, 0.0]), 0.2)  # position  # radius
-obs2 = SphereObstacle(np.array([-1.0, 0.0, 0.0]), 0.2)  # position  # radius
-obs_list = [obs1, obs2]
+obs1 = SphereObstacle(np.array([0.0, 1.0, 0.0]), 0.2)
+obs2 = SphereObstacle(np.array([-1.0, 0.0, 0.0]), 0.2)
+obs3 = SphereObstacle(np.array([0.0, -1.0, 0.0]), 0.2)
+obs_list = [obs1, obs2, obs3]
 
 
 # SIMULATORS #
@@ -87,56 +88,56 @@ simulator1 = SimulationEnvironment(
     (-2, 2),
     (-2, 2),
 )
-simulator2 = SimulationEnvironment(
-    quad,  # quadcopter
-    mrc,  # controller
-    None,  # obstacle list
-    (-2, 2),  # xyz limits
-    (-2, 2),
-    (-2, 2),
-)
+# simulator2 = SimulationEnvironment(
+#     quad,  # quadcopter
+#     mrc,  # controller
+#     None,  # obstacle list
+#     (-2, 2),  # xyz limits
+#     (-2, 2),
+#     (-2, 2),
+# )
 
 
 if __name__ == "__main__":
     # simulation 1: no disturbance
-    # s0 = np.zeros(12)                         # initial state
-    # sim_length = 30.                          # simulation time
-    # frames = int(10 * sim_length + 1)         # number of frames
-    # fps = 20.                                 # animation fps
-    # tsim = np.linspace(0, sim_length, frames) # query times
-    # # name = 'mpc_obs_10hz'  # [TOGGLE]
-    # name = None
-    # sim_data = simulator1.simulate(
-    #     s0,
-    #     tsim,
-    #     dfunc=None,      # disturbance function
-    #     animate=True,    # flag for animation
-    #     anim_name=name,  # 'NAME' to save the run as 'NAME.mp4'
-    #     fps=fps          # frames per second
-    # )
-
-    # simulation 2: yes disturbance
     s0 = np.zeros(12)  # initial state
     sim_length = 30.0  # simulation time
     frames = int(10 * sim_length + 1)  # number of frames
     fps = 20.0  # animation fps
     tsim = np.linspace(0, sim_length, frames)  # query times
-
-    def dfunc(t, s):  # disturbance function
-        if t >= 5 and t < 15:
-            return np.array([0, 0, -3, 0, 0, 0])
-        elif t >= 15 and t < 25:
-            return np.array([0, 0, 3, 0, 0, 0])
-        else:
-            return np.zeros(6)
-
-    name = "mpc_obs_dist_big"  # [TOGGLE]
+    name = "mpc_obs_3obs"  # [TOGGLE]
     # name = None
-    sim_data = simulator2.simulate(
+    sim_data = simulator1.simulate(
         s0,
         tsim,
-        dfunc=dfunc,  # disturbance function
+        dfunc=None,  # disturbance function
         animate=True,  # flag for animation
         anim_name=name,  # 'NAME' to save the run as 'NAME.mp4'
         fps=fps,  # frames per second
     )
+
+    # simulation 2: yes disturbance
+    # s0 = np.zeros(12)  # initial state
+    # sim_length = 30.0  # simulation time
+    # frames = int(10 * sim_length + 1)  # number of frames
+    # fps = 20.0  # animation fps
+    # tsim = np.linspace(0, sim_length, frames)  # query times
+
+    # def dfunc(t, s):  # disturbance function
+    #     if t >= 5 and t < 15:
+    #         return np.array([0, 0, -3, 0, 0, 0])
+    #     elif t >= 15 and t < 25:
+    #         return np.array([0, 0, 3, 0, 0, 0])
+    #     else:
+    #         return np.zeros(6)
+
+    # name = "mpc_obs_dist_big"  # [TOGGLE]
+    # # name = None
+    # sim_data = simulator2.simulate(
+    #     s0,
+    #     tsim,
+    #     dfunc=dfunc,  # disturbance function
+    #     animate=True,  # flag for animation
+    #     anim_name=name,  # 'NAME' to save the run as 'NAME.mp4'
+    #     fps=fps,  # frames per second
+    # )
