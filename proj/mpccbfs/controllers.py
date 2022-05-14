@@ -582,6 +582,8 @@ class MultirateQuadController(Controller):
         dt = self._slow_dt
         u_bar = np.array([self._quad._m * g, 0.0, 0.0, 0.0])
 
+        offset = self._quad._dyn(s, u_bar)  # f(x_bar, u_bar)
+
         # initializing constraints
         Cineqs = []
         lbineqs = []
@@ -615,8 +617,8 @@ class MultirateQuadController(Controller):
                 C[:, (n * (i - 1)) : (n * i)] = -(np.eye(n) + dt * A)
                 C[:, (n * i) : (n * (i + 1))] = np.eye(n)
                 C[:, (u_off + m * (i - 1)) : (u_off + m * i)] = -dt * B
-                lb = -dt * (A @ s + B @ u_bar)
-                ub = -dt * (A @ s + B @ u_bar)
+                lb = -dt * (A @ s + B @ u_bar - offset)
+                ub = -dt * (A @ s + B @ u_bar - offset)
 
             Ceqs.append(C)
             lbeqs.append(lb)
